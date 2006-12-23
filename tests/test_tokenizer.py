@@ -7,11 +7,8 @@ import new
 
 import simplejson
 
-#Allow us to import the parent module
-os.chdir(os.path.split(os.path.abspath(__file__))[0])
-sys.path.insert(0, os.path.abspath(os.path.join(os.pardir, "src")))
-
-from tokenizer import HTMLTokenizer
+import html5lib
+from html5lib.tokenizer import HTMLTokenizer
 
 class TokenizerTestParser(object):
     def parse(self, stream, innerHTML=False):
