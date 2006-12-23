@@ -240,32 +240,44 @@ class HTMLParser(object):
         assert False # We should never reach this point
 
     def reconstructActiveFormattingElements(self):
-        # This covers the ", if any" case mentioned often in the drafts, before
-        # you have to reconstruct the active formatting elements.
+        # Within this algorithm the order of steps described in the
+        # specification is not quite the same as the order of steps in the
+        # code. It should still do the same though.
+
+        # Step 1: stop the algorithm when there's nothing to do.
         if not self.activeFormattingElements:
             return
 
-        # We start with the last element. So i is -1.
+        # Step 2 and step 3: we start with the last element. So i is -1.
         i = -1
         entry = self.activeFormattingElements[i]
-
-        # Step 1
         if entry == Marker or entry in self.openElements:
             return
 
-        # Step 2 is covered above. When we assign entry to the last element.
-        # Step 3 and 4.
-        # XXX The specification says "and entry _not_ in" but that doesn't
-        # work. This seems to give correct results too...
-        while entry != Marker and entry in self.openElements:
+        # Step 6
+        while entry != Marker and entry not in self.openElements:
+            # Step 5: let entry be one earlier in the list.
             i -= 1
-            entry = self.activeFormattingElements[i]
+            try:
+                entry = self.activeFormattingElements[i]
+            except:
+                # Step 4: at this point we need to jump to step 8. By not doing
+                # i += 1 which is also done in step 7 we achieve that.
+                break
         while True:
-            # XXX why clone?
+            # Step 7
             i += 1
+
+            # Step 8
             clone = self.activeFormattingElements[i].cloneNode()
+
+            # Step 9
             element = self.insertElement(clone.name, clone.attributes)
+
+            # Step 10
             self.activeFormattingElements[i] = element
+
+            # Step 11
             if element == self.activeFormattingElements[-1]:
                 break
 
@@ -789,7 +801,9 @@ class InBody(InsertionMode):
             self.parser.openElements[-1])
 
     # the real deal
-    def processCharacter(self, data):
+    def processNonSpaceCharacter(self, data):
+        # XXX The specification says to do this for every character at the
+        # moment, but apparently that doesn't match the real world...
         self.parser.reconstructActiveFormattingElements()
         self.parser.insertText(data)
 
@@ -851,11 +865,11 @@ class InBody(InsertionMode):
 
     def startTagCloseP(self, name, attributes):
         if self.parser.elementInScope("p"):
-            self.endTagP(name)
+            self.endTagP("p")
         self.parser.insertElement(name, attributes)
 
     def startTagForm(self, name, attributes):
-        if self.parser.formPointer is not None:
+        if self.parser.formPointer:
             self.parser.parseError()
         else:
             if self.parser.elementInScope("p"):
@@ -949,7 +963,8 @@ class InBody(InsertionMode):
         self.parser.openElements.pop()
 
     def startTagHr(self, name, attributes):
-        self.endTagP("p")
+        if self.parser.elementInScope("p"):
+            self.endTagP("p")
         self.parser.insertElement(name, attributes)
         self.parser.openElements.pop()
 
@@ -961,14 +976,14 @@ class InBody(InsertionMode):
     def startTagInput(self, name, attributes):
         self.parser.reconstructActiveFormattingElements()
         self.parser.insertElement(name, attributes)
-        if self.parser.formPointer is not None:
+        if self.parser.formPointer:
             # XXX Not exactly sure what to do here
             self.parser.openElements[-1].form = self.parser.formPointer
         self.parser.openElements.pop()
 
     def startTagIsIndex(self, name, attributes):
         self.parser.parseError()
-        if self.parser.formPointer is not None:
+        if self.parser.formPointer:
             return
         self.parser.processStartTag("form", [])
         self.parser.processStartTag("hr", [])
@@ -1048,7 +1063,7 @@ class InBody(InsertionMode):
     def endTagP(self, name):
         self.parser.generateImpliedEndTags("p")
         if self.parser.openElements[-1].name != "p":
-           self.parser.parseError()
+            self.parser.parseError()
         while self.parser.elementInScope("p"):
             self.parser.openElements.pop()
 
