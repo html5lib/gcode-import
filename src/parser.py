@@ -14,7 +14,17 @@ Marker = None
 
 #Really crappy basic implementation of a DOM-core like thing
 class Node(object):
+    """Very simplistic DOM-like node.
+
+    Attributes:
+    name - The node name
+    value - The value of the node
+    parent - The parent node
+    childNodes - List of child nodes
+    attributes - Dictionary of attribute:value pairs
+"""
     def __init__(self, name):
+        """name - the node name"""
         self.name = name
         self.parent = None
         self.value = None
@@ -29,12 +39,18 @@ class Node(object):
         return "<%s %s>"%(self.__class__, self.name)
 
     def printTree(self, indent=0):
+        """Print the subtree starting from the current node in a format 
+        useful for comparing with testcases"""
         tree = '\n|%s%s' % (' '*indent, str(self))
         for child in self.childNodes:
             tree += child.printTree(indent+2)
         return tree
 
-    def appendChild(self, node, index=None):
+    def appendChild(self, node):
+        """Add a child to the current node
+
+        node - the node to append as a child
+"""
         if (isinstance(node, TextNode) and self.childNodes and
           isinstance(self.childNodes[-1], TextNode)):
             self.childNodes[-1].value += node.value
@@ -43,6 +59,11 @@ class Node(object):
         node.parent = self
 
     def insertBefore(self, node, refNode):
+        """Insert a node before a given node in this node's child nodes
+
+        node - The node to insert
+        refNode - The node to insert before
+"""
         index = self.childNodes.index(refNode)
         if (isinstance(node, TextNode) and index > 0 and
           isinstance(self.childNodes[index - 1], TextNode)):
@@ -52,6 +73,9 @@ class Node(object):
         node.parent = self
 
     def removeChild(self, node):
+        """Remove a child of the current node
+
+        node - the child node to remove"""
         try:
             self.childNodes.remove(node)
         except:
@@ -60,6 +84,8 @@ class Node(object):
         node.parent = None
 
     def cloneNode(self):
+        """Clone the current node, returning a new node with the same 
+        name, value, and attributes"""
         newNode = type(self)(self.name)
         for attr, value in self.attributes.iteritems():
             newNode.attributes[attr] = value
@@ -88,6 +114,7 @@ class DocumentType(Node):
 
 class TextNode(Node):
     def __init__(self, value):
+        """value - the text in the node"""
         Node.__init__(self, None)
         self.value = value
 
@@ -137,8 +164,14 @@ class HTMLParser(object):
                        "trailingEnd":TrailingEndPhase}
 
     def parse(self, stream, innerHTML=False):
-        """Stream should be a stream of unicode bytes. Character encoding
-        issues have not yet been dealt with."""
+        """Parses a document and returns a DOM-like object
+
+        stream - a file-like object or a string containing the text to
+        parse. Stream should be a stream of unicode bytes; we don't
+        yet have full support for different character sets 
+
+        innerHTML - True if we are processing an innerHTML document fragment. 
+        Only innerHTML=False case is currently implemented"""
 
         self.document = Document()
 
