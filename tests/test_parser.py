@@ -5,6 +5,9 @@ import StringIO
 import unittest
 import new
 
+import html5lib
+from html5lib import parser
+
 def parseTestcase(testString):
     testString = testString.split("\n")
     try:
@@ -43,7 +46,6 @@ def convertTreeDump(treedump):
 
 class TestCase(unittest.TestCase):
     def runParserTest(self, input, output, errors):
-        import parser
         #XXX - move this out into the setup function
         #concatenate all consecutive character tokens into a single token
         p = parser.HTMLParser()
@@ -86,8 +88,4 @@ def main():
     unittest.main()
 
 if __name__ == "__main__":
-    #Allow us to import the parent module
-    os.chdir(os.path.split(os.path.abspath(__file__))[0])
-    sys.path.insert(0, os.path.abspath(os.path.join(os.pardir, "src")))
-
     main()
