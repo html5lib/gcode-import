@@ -11,6 +11,12 @@ class Node(_base.Node):
         self.childNodes = []
         self._flags = []
 
+    def __iter__(self):
+        for node in self.childNodes:
+            yield node
+            for item in node:
+                yield item
+
     def __unicode__(self):
         return self.name
 
