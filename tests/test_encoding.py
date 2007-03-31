@@ -42,12 +42,20 @@ class TestCase(unittest.TestCase):
     def runEncodingTest(self, input, encoding):
         #XXX - move this out into the setup function
         #concatenate all consecutive character tokens into a single token
-        stream = inputstream.HTMLInputStream(input)
+        stream = inputstream.HTMLInputStream(input, chardet=False)
         
         errorMsg = "\n".join(["\n\nInput", input,"\nExpected:", encoding,
                               "\nRecieved:", stream.charEncoding])
         self.assertEquals(encoding.lower(), stream.charEncoding.lower(),
                           errorMsg)
+
+class ChardetTest(unittest.TestCase):
+    def testChardet(self):
+        f = open("encoding/chardet/test_big5.txt")
+        stream = inputstream.HTMLInputStream(f.read(), chardet=True)
+        self.assertEquals("big5", stream.charEncoding.lower(),
+                          "Chardet failed: expected big5 got "+
+                          stream.charEncoding.lower())
 
 def test_encoding():
     for filename in glob.glob('encoding/*.dat'):
@@ -70,11 +78,16 @@ def buildTestSuite():
         testFunc.__doc__ = 'Encoding %s'%(testName)
         instanceMethod = new.instancemethod(testFunc, None, TestCase)
         setattr(TestCase, testName, instanceMethod)
-    return unittest.TestLoader().loadTestsFromTestCase(TestCase)
+    testSuite = unittest.TestLoader().loadTestsFromTestCase(TestCase)
+    try:
+        import chardet
+        testSuite.addTest(ChardetTest('testChardet'))  
+    except ImportError:
+        print "chardet not found, skipping chardet tests"
+    return testSuite
 
-def main():   
-    buildTestSuite()
-    unittest.main()
+def main():
+    unittest.main(defaultTest="buildTestSuite")
 
 if __name__ == "__main__":
     main()

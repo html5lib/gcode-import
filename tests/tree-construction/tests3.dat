@@ -130,3 +130,42 @@ y</pre></body></html>
 |       <div>
 |         "
 | y"
+
+#data
+<!DOCTYPE html><HTML><META><HEAD></HEAD></HTML>
+#errors
+#document
+| <!DOCTYPE HTML>
+| <html>
+|   <head>
+|     <meta>
+|   <body>
+
+#data
+<!DOCTYPE html><HTML><HEAD><head></HEAD></HTML>
+#errors
+#document
+| <!DOCTYPE HTML>
+| <html>
+|   <head>
+|   <body>
+
+#data
+<textarea>foo<span>bar</span><i>baz
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <textarea>
+|       "foo<span>bar</span><i>baz"
+
+#data
+<title>foo<span>bar</em><i>baz
+#errors
+#document
+| <html>
+|   <head>
+|     <title>
+|       "foo<span>bar</em><i>baz"
+|   <body>
