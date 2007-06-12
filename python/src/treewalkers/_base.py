@@ -1,151 +1,54 @@
-import gettext
-_ = gettext.gettext
-
-from constants import voidElements, spaceCharacters
-spaceCharacters = u"".join(spaceCharacters)
 
 class TreeWalker(object):
-    def __init__(self, tree):
-        self.tree = tree
-
-    def __iter__(self):
+    def _not_implemented_method(self):
         raise NotImplementedError
 
-    def error(self, msg):
-        return {"type": "SerializeError", "data": msg}
+    type = property(_not_implemented_method, doc= \
+        """Read-only. A string, either "Document", "DocumentFragment", "Doctype",
+        "Element", "Text" or "Comment".
+        """)
 
-    def normalizeAttrs(self, attrs):
-        if not attrs:
-            attrs = []
-        elif hasattr(attrs, 'items'):
-            attrs = attrs.items()
-        return [(unicode(name),unicode(value)) for name,value in attrs]
+    name = property(_not_implemented_method, doc= \
+        """Read-only. The current node's name.
 
-    def emptyTag(self, name, attrs, hasChildren=False):
-        yield {"type": "EmptyTag", "name": unicode(name), \
-                "data": self.normalizeAttrs(attrs)}
-        if hasChildren:
-            yield self.error(_("Void element has children"))
+        Valid only if type is "Doctype" or "Element".
+        """)
 
-    def startTag(self, name, attrs):
-        return {"type": "StartTag", "name": unicode(name), \
-                 "data": self.normalizeAttrs(attrs)}
+    attributes = property(_not_implemented_method, doc= \
+        """Read-only. A tuple of (name, value) tuples representing the \
+        current node's attributes.
 
-    def endTag(self, name):
-        return {"type": "EndTag", "name": unicode(name), "data": []}
+        Valid only if type is "Element"
+        """)
 
-    def text(self, data):
-        data = unicode(data)
-        middle = data.lstrip(spaceCharacters)
-        left = data[:len(data)-len(middle)]
-        if left:
-            yield {"type": "SpaceCharacters", "data": left}
-        data = middle
-        middle = data.rstrip(spaceCharacters)
-        right = data[len(middle):]
-        if middle:
-            yield {"type": "Characters", "data": middle}
-        if right:
-            yield {"type": "SpaceCharacters", "data": right}
+    value = property(_not_implemented_method, doc= \
+        """Read-only. The current node's value.
 
-    def comment(self, data):
-        return {"type": "Comment", "data": unicode(data)}
+        Valid only if type is "Text" or "Comment".
+        """)
 
-    def doctype(self, name):
-        return {"type": "Doctype", "name": unicode(name), "data": name.upper() == "HTML"}
+    hasChildren = property(_not_implemented_method, doc= \
+        """Read-only. A boolean telling whether the current node has children.
 
-    def unknown(self, nodeType):
-        return self.error(_("Unknown node type: ") + nodeType)
+        Valid only if type is "Document", "DocumentFragment" or "Element".
+        """)
 
-class RecursiveTreeWalker(TreeWalker):
-    def walkChildren(self, node):
-        raise NodeImplementedError
+    def firstChild(self):
+        """Move to the current node's first child.
 
-    def element(self, node, name, attrs, hasChildren):
-        if name in voidElements:
-            for token in self.emptyTag(name, attrs, hasChildren):
-                yield token
-        else:
-            yield self.startTag(name, attrs)
-            if hasChildren:
-                for token in self.walkChildren(node):
-                    yield token
-            yield self.endTag(name)
-
-from xml.dom import Node
-
-DOCUMENT = Node.DOCUMENT_NODE
-DOCTYPE = Node.DOCUMENT_TYPE_NODE
-TEXT = Node.TEXT_NODE
-ELEMENT = Node.ELEMENT_NODE
-COMMENT = Node.COMMENT_NODE
-UNKNOWN = "<#UNKNOWN#>"
-
-class NonRecursiveTreeWalker(TreeWalker):
-    def getNodeDetails(self, node):
-        raise NotImplementedError
-    
-    def getFirstChild(self, node):
-        raise NotImplementedError
-    
-    def getNextSibling(self, node):
-        raise NotImplementedError
-    
-    def getParentNode(self, node):
+        This method is called only if type is "Document", "DocumentFragment" or "Element"
+        and if hasChildren is True.
+        """
         raise NotImplementedError
 
-    def __iter__(self):
-        currentNode = self.tree
-        while currentNode is not None:
-            details = self.getNodeDetails(currentNode)
-            type, details = details[0], details[1:]
-            hasChildren = False
+    def nextSibling(self):
+        """Move to the current node's next sibling and return True, or return False if there are no following siblings."""
+        raise NotImplementedError
 
-            if type == DOCTYPE:
-                yield self.doctype(*details)
+    def parentNode(self):
+        """Move to the current node's parent.
 
-            elif type == TEXT:
-                for token in self.text(*details):
-                    yield token
+        This method is never called if type is "Document" or "DocumentFragment"
+        """
+        raise NotImplementedError
 
-            elif type == ELEMENT:
-                name, attributes, hasChildren = details
-                if name in voidElements:
-                    for token in self.emptyTag(name, attributes, hasChildren):
-                        yield token
-                    hasChildren = False
-                else:
-                    yield self.startTag(name, attributes)
-
-            elif type == COMMENT:
-                yield self.comment(details[0])
-
-            elif type == DOCUMENT:
-                hasChildren = True
-
-            else:
-                yield self.unknown(details[0])
-            
-            if hasChildren:
-                firstChild = self.getFirstChild(currentNode)
-            else:
-                firstChild = None
-            
-            if firstChild is not None:
-                currentNode = firstChild
-            else:
-                while currentNode is not None:
-                    details = self.getNodeDetails(currentNode)
-                    type, details = details[0], details[1:]
-                    if type == ELEMENT:
-                        name, attributes, hasChildren = details
-                        if name not in voidElements:
-                            yield self.endTag(name)
-                    nextSibling = self.getNextSibling(currentNode)
-                    if nextSibling is not None:
-                        currentNode = nextSibling
-                        break
-                    if self.tree is currentNode:
-                        currentNode = None
-                    else:
-                        currentNode = self.getParentNode(currentNode)

@@ -80,119 +80,143 @@ class HTMLSerializer(object):
         self.strict = False
 
     def serialize(self, treewalker, encoding=None):
+        openElements = []
         in_cdata = False
         self.errors = []
         if encoding and self.inject_meta_charset:
-            treewalker = self.filter_inject_meta_charset(treewalker, encoding)
+            #treewalker = self.filter_inject_meta_charset(treewalker, encoding)
+            raise NotImplementedError
         # XXX: WhitespaceFilter should be used before OptionalTagFilter
         # for maximum efficiently of this latter filter
         if self.strip_whitespace:
             treewalker = WhitespaceFilter(treewalker)
-        if self.omit_optional_tags:
-            treewalker = OptionalTagFilter(treewalker)
-        for token in treewalker:
-            type = token["type"]
-            if type == "Doctype":
-                doctype = u"<!DOCTYPE %s>" % token["name"]
+
+        while True:
+            if self.tree.type in ("Document", "DocumentFragment"):
+                if self.tree.hasChildren:
+                    self.tree.firstChild()
+                    continue
+
+            elif self.tree.type == "Doctype":
+                assert not openElements
+                doctype = u"<!DOCTYPE %s>" % self.tree.name
                 if encoding:
                     yield doctype.encode(encoding)
                 else:
                     yield doctype
 
-            elif type in ("Characters", "SpaceCharacters"):
-                if type == "SpaceCharacters" or in_cdata:
-                    if in_cdata and token["data"].find("</") >= 0:
-                        self.serializeError(_("Unexpected </ in CDATA"))
-                    if encoding:
-                        yield token["data"].encode(encoding, "strict")
-                    else:
-                        yield token["data"]
-                elif encoding:
-                    yield escape_text(token["data"], encoding)
+            elif self.tree.type == "Element":
+                yield self.startTag(encoding)
+                if self.tree.name not in voidElements:
+                    openElements.append(self.tree.name)
+                    if self.tree.hasChildren:
+                        self.tree.firstChild()
+                        continue
                 else:
-                    yield token["data"] \
+                    if self.tree.hasChildren:
+                        pass # error
+
+            elif self.tree.type == "Text":
+                text = self.tree.value
+                if in_cdata and text.find("</") >= 0:
+                    self.serializeError(_("Unexpected </ in CDATA"))
+                if encoding:
+                    yield escape_text(text, encoding)
+                else:
+                    yield text \
                         .replace("&", "&amp;") \
                         .replace("<", "&lt;")  \
                         .replace(">", "&gt;")
 
-            elif type in ("StartTag", "EmptyTag"):
-                name = token["name"]
-                if name in self.cdata_elements:
-                    in_cdata = True
-                elif in_cdata:
-                    self.serializeError(_("Unexpected child element of a CDATA element"))
-                attrs = token["data"]
-                if hasattr(attrs, "items"):
-                    attrs = attrs.items()
-                attrs.sort()
-                attributes = []
-                for k,v in attrs:
-                    if encoding:
-                        k = k.encode(encoding, "strict")
-                    attributes.append(' ')
+            elif self.tree.type == "Comment":
+                yield "%s<!--%s-->" % ('  '*len(openElements), self.tree.value)
 
-                    attributes.append(k)
-                    if not self.minimize_boolean_attributes or \
-                      (k not in booleanAttributes.get(name, tuple()) \
-                      and k not in booleanAttributes.get("", tuple())):
-                        attributes.append("=")
-                        if self.quote_attr_values or not v:
-                            quote_attr = True
-                        else:
-                            quote_attr = reduce(lambda x,y: x or (y in v),
-                                spaceCharacters + "<>\"'", False)
-                        if encoding:
-                            v = escape_text(v, encoding)
-                        else:
-                            v = v.replace("&", "&amp;")
-                        if quote_attr:
-                            quote_char = self.quote_char
-                            if self.use_best_quote_char:
-                                if "'" in v and '"' not in v:
-                                    quote_char = '"'
-                                elif '"' in v and "'" not in v:
-                                    quote_char = "'"
-                            if quote_char == "'":
-                                v = v.replace("'", "&#39;")
-                            else:
-                                v = v.replace('"', "&quot;")
-                            attributes.append(quote_char)
-                            attributes.append(v)
-                            attributes.append(quote_char)
-                        else:
-                            attributes.append(v)
-                if name in voidElements and self.use_trailing_solidus:
-                    if self.space_before_trailing_solidus:
-                        attributes.append(" /")
-                    else:
-                        attributes.append("/")
-                if encoding:
-                    yield "<%s%s>" % (name.encode(encoding, "strict"), "".join(attributes))
-                else:
-                    yield u"<%s%s>" % (name, u"".join(attributes))
+            while self.tree.type not in ("Document", "DocumentFragment"):
+                if self.tree.type == "Element":
+                  if self.tree.name not in voidElements:
+                    assert self.tree.name == openElements.pop()
+                    yield "%s</%s>" % ('  '*len(openElements), self.tree.name)
 
-            elif type == "EndTag":
-                name = token["name"]
-                if name in self.cdata_elements:
-                    in_cdata = False
-                elif in_cdata:
-                    self.serializeError(_("Unexpected child element of a CDATA element"))
-                end_tag = u"</%s>" % name
-                if encoding:
-                    end_tag = end_tag.encode(encoding, "strict")
-                yield end_tag
-
-            elif type == "Comment":
-                data = token["data"]
-                if data.find("--") >= 0:
-                    self.serializeError(_("Comment contains --"))
-                comment = u"<!--%s-->" % token["data"]
-                if encoding:
-                    comment = comment.encode(encoding, unicode_encode_errors)
-                yield comment
-
+                if self.tree.nextSibling():
+                    break
+                self.tree.parentNode()
             else:
-                self.serializeError(token["data"])
+                raise StopIteration
+
+    def _startTag(self, encoding):
+        name = self.tree.name
+        if name in self.cdata_elements:
+            in_cdata = True
+        elif in_cdata:
+            self.serializeError(_("Unexpected child element of a CDATA element"))
+        attrs = list(self.tree.attributes)
+        attrs.sort()
+        attributes = []
+        for k,v in attrs:
+            if encoding:
+                k = k.encode(encoding, "strict")
+            attributes.append(' ')
+
+            attributes.append(k)
+            if not self.minimize_boolean_attributes or \
+              (k not in booleanAttributes.get(name, tuple()) \
+              and k not in booleanAttributes.get("", tuple())):
+                attributes.append("=")
+                if self.quote_attr_values or not v:
+                    quote_attr = True
+                else:
+                    quote_attr = reduce(lambda x,y: x or (y in v),
+                        spaceCharacters + "<>\"'", False)
+                if encoding:
+                    v = escape_text(v, encoding)
+                else:
+                    v = v.replace("&", "&amp;")
+                if quote_attr:
+                    quote_char = self.quote_char
+                    if self.use_best_quote_char:
+                        if "'" in v and '"' not in v:
+                            quote_char = '"'
+                        elif '"' in v and "'" not in v:
+                            quote_char = "'"
+                    if quote_char == "'":
+                        v = v.replace("'", "&#39;")
+                    else:
+                        v = v.replace('"', "&quot;")
+                    attributes.append(quote_char)
+                    attributes.append(v)
+                    attributes.append(quote_char)
+                else:
+                    attributes.append(v)
+        if name in voidElements and self.use_trailing_solidus:
+            if self.space_before_trailing_solidus:
+                attributes.append(" /")
+            else:
+                attributes.append("/")
+        if encoding:
+            yield "<%s%s>" % (name.encode(encoding, "strict"), "".join(attributes))
+        else:
+            yield u"<%s%s>" % (name, u"".join(attributes))
+
+    def _endTag(self, encoding):
+        name = self.tree.name
+        if name in self.cdata_elements:
+            in_cdata = False
+        elif in_cdata:
+            self.serializeError(_("Unexpected child element of a CDATA element"))
+        end_tag = u"</%s>" % name
+        if encoding:
+            end_tag = end_tag.encode(encoding, "strict")
+        yield end_tag
+
+    def _comment(self, encoding):
+        data = self.tree.value
+        if data.find("--") >= 0:
+            self.serializeError(_("Comment contains --"))
+        comment = u"<!--%s-->" % token["data"]
+        if encoding:
+            comment = comment.encode(encoding, unicode_encode_errors)
+        yield comment
+
 
     def render(self, treewalker, encoding=None):
         if encoding:
