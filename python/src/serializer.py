@@ -51,6 +51,8 @@ else:
 def escape_text(text, encoding):
     return text.replace("&", "&amp;").encode(encoding, unicode_encode_errors)
 
+_ROOT_MARKER = "<#ROOT#>"
+
 class HTMLSerializer(object):
     cdata_elements = frozenset(("style", "script", "xmp", "iframe", "noembed", "noframes", "noscript"))
 
@@ -80,8 +82,7 @@ class HTMLSerializer(object):
         self.strict = False
 
     def serialize(self, treewalker, encoding=None):
-        openElements = []
-        in_cdata = False
+        openElements = [] # list of (name, in_cdata) tuples
         self.errors = []
         if encoding and self.inject_meta_charset:
             #treewalker = self.filter_inject_meta_charset(treewalker, encoding)
@@ -92,64 +93,58 @@ class HTMLSerializer(object):
             treewalker = WhitespaceFilter(treewalker)
 
         while True:
-            if self.tree.type in ("Document", "DocumentFragment"):
-                if self.tree.hasChildren:
-                    self.tree.firstChild()
+            if treewalker.type in ("Document", "DocumentFragment"):
+                openElements.append((_ROOT_MARKER, False))
+                if treewalker.hasChildren:
+                    treewalker.firstChild()
                     continue
 
-            elif self.tree.type == "Doctype":
-                assert not openElements
-                doctype = u"<!DOCTYPE %s>" % self.tree.name
-                if encoding:
-                    yield doctype.encode(encoding)
-                else:
-                    yield doctype
+            elif treewalker.type == "Doctype":
+                assert len(openElements) == 1
+                yield self._doctype(treewalker.name, encoding)
 
-            elif self.tree.type == "Element":
-                yield self.startTag(encoding)
-                if self.tree.name not in voidElements:
-                    openElements.append(self.tree.name)
-                    if self.tree.hasChildren:
-                        self.tree.firstChild()
+            elif treewalker.type == "Element":
+                name = treewalker.name
+                if openElements[-1][1]: # in_cdata
+                    self.serializeError(_("Unexpected child element of a CDATA element"))
+                yield self._startTag(name, treewalker.attributes, encoding)
+                if name not in voidElements:
+                    openElements.append((name, openElements[-1][1] or name in self.cdata_elements))
+                    if treewalker.hasChildren:
+                        treewalker.firstChild()
                         continue
                 else:
-                    if self.tree.hasChildren:
-                        pass # error
+                    if treewalker.hasChildren:
+                        self.serializeError(_("Void element has children: %s") % name)
 
-            elif self.tree.type == "Text":
-                text = self.tree.value
-                if in_cdata and text.find("</") >= 0:
+            elif treewalker.type == "Text":
+                text = treewalker.value
+                if openElements[-1][1] and text.find("</") >= 0: # in_cdata
                     self.serializeError(_("Unexpected </ in CDATA"))
-                if encoding:
-                    yield escape_text(text, encoding)
-                else:
-                    yield text \
-                        .replace("&", "&amp;") \
-                        .replace("<", "&lt;")  \
-                        .replace(">", "&gt;")
+                yield self._text(text, encoding)
 
-            elif self.tree.type == "Comment":
-                yield "%s<!--%s-->" % ('  '*len(openElements), self.tree.value)
+            elif treewalker.type == "Comment":
+                yield self._comment(treewalker.value, encoding)
 
-            while self.tree.type not in ("Document", "DocumentFragment"):
-                if self.tree.type == "Element":
-                  if self.tree.name not in voidElements:
-                    assert self.tree.name == openElements.pop()
-                    yield "%s</%s>" % ('  '*len(openElements), self.tree.name)
+            while openElements:
+                parent = openElements.pop()
+                if parent[0] is not _ROOT_MARKER and parent[0] not in voidElements:
+                    yield self._endTag(parent[0], encoding)
 
-                if self.tree.nextSibling():
+                if treewalker.nextSibling():
                     break
-                self.tree.parentNode()
+                treewalker.parentNode()
             else:
                 raise StopIteration
 
-    def _startTag(self, encoding):
-        name = self.tree.name
-        if name in self.cdata_elements:
-            in_cdata = True
-        elif in_cdata:
-            self.serializeError(_("Unexpected child element of a CDATA element"))
-        attrs = list(self.tree.attributes)
+    def _doctype(self, name, encoding):
+        doctype = u"<!DOCTYPE %s>" % name
+        if encoding:
+            doctype = doctype.encode(encoding)
+        return doctype
+
+    def _startTag(self, name, attrs, encoding):
+        attrs = list(attrs)
         attrs.sort()
         attributes = []
         for k,v in attrs:
@@ -193,29 +188,32 @@ class HTMLSerializer(object):
             else:
                 attributes.append("/")
         if encoding:
-            yield "<%s%s>" % (name.encode(encoding, "strict"), "".join(attributes))
+            return "<%s%s>" % (name.encode(encoding, "strict"), "".join(attributes))
         else:
-            yield u"<%s%s>" % (name, u"".join(attributes))
+            return u"<%s%s>" % (name, u"".join(attributes))
 
-    def _endTag(self, encoding):
-        name = self.tree.name
-        if name in self.cdata_elements:
-            in_cdata = False
-        elif in_cdata:
-            self.serializeError(_("Unexpected child element of a CDATA element"))
+    def _endTag(self, name, encoding):
         end_tag = u"</%s>" % name
         if encoding:
             end_tag = end_tag.encode(encoding, "strict")
-        yield end_tag
+        return end_tag
 
-    def _comment(self, encoding):
-        data = self.tree.value
+    def _comment(self, data, encoding):
         if data.find("--") >= 0:
             self.serializeError(_("Comment contains --"))
         comment = u"<!--%s-->" % token["data"]
         if encoding:
             comment = comment.encode(encoding, unicode_encode_errors)
-        yield comment
+        return comment
+
+    def _text(self, text, encoding):
+        if encoding:
+            return escape_text(text, encoding)
+        else:
+            return text \
+                .replace("&", "&amp;") \
+                .replace("<", "&lt;")  \
+                .replace(">", "&gt;")
 
 
     def render(self, treewalker, encoding=None):
