@@ -26,6 +26,7 @@ def getTreeWalker(treeType, implementation=None, **kwargs):
                 "etree" - A generic builder for tree implementations exposing an
                           elementtree-like interface (known to work with
                           ElementTree, cElementTree and lxml.etree).
+                "lxml" - Optimized builder for lxml.etree
                 "beautifulsoup" - Beautiful soup (if installed)
                 "genshi" - a Genshi stream
 
@@ -44,6 +45,9 @@ def getTreeWalker(treeType, implementation=None, **kwargs):
         elif treeType == "beautifulsoup":
             import soup
             treeWalkerCache[treeType] = soup.TreeWalker
+        elif treeType == "lxml":
+            import lxmletree
+            treeWalkerCache[treeType] = lxmletree.TreeWalker
         elif treeType == "etree":
             import etree
             treeWalkerCache[treeType] = etree.getETreeModule(implementation, **kwargs).TreeWalker
