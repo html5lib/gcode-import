@@ -3,7 +3,7 @@ _ = gettext.gettext
 
 import _base
 
-class TreeWalker(_base.NonRecursiveTreeWalker):
+class TreeWalker(_base.TreeWalker):
     """Given that simpletree has no performant way of getting a node's
     next sibling, this implementation returns "nodes" as tuples with the
     following content:
@@ -16,33 +16,59 @@ class TreeWalker(_base.NonRecursiveTreeWalker):
        first item is a parent Node and second item is a child index.
     """
 
-    def getNodeDetails(self, node):
-        if isinstance(node, tuple): # It might be the root Node
+    def __init__(self, node):
+        self.node = node
+
+    def _getNode(self):
+        node = self.node
+        if isinstance(node, tuple):
             parent, idx, parents = node
             node = parent.childNodes[idx]
+        return node
+
+    def _getType(self):
+        node = self._getNode()
 
         # testing node.type allows us not to import treebuilders.simpletree
-        if node.type in (1, 2): # Document or DocumentFragment
-            return (_base.DOCUMENT,)
+        if node.type == 1:
+            return "Document"
 
-        elif node.type == 3: # DocumentType
-            return _base.DOCTYPE, node.name
+        elif node.type == 2:
+            return "DocumentFragment"
 
-        elif node.type == 4: # TextNode
-            return _base.TEXT, node.value
+        elif node.type == 3:
+            return "Doctype"
 
-        elif node.type == 5: # Element
-            return _base.ELEMENT, node.name, \
-                node.attributes.items(), node.hasContent()
+        elif node.type == 4:
+            return "Text"
 
-        elif node.type == 6: # CommentNode
-            return _base.COMMENT, node.data
+        elif node.type == 5:
+            return "Element"
+
+        elif node.type == 6:
+            return "Comment"
 
         else:
-            return _node.UNKNOWN, node.type
+            raise Exception("Are there other types?")
 
-    def getFirstChild(self, node):
-        if isinstance(node, tuple): # It might be the root Node
+    def _getName(self):
+        return self._getNode().name
+
+    def _getValue(self):
+        node = self._getNode()
+        if node.type == 6: # Comment
+            return node.data
+        return node.value
+
+    def _getAttributes(self):
+        return tuple(self._getNode().attributes.items())
+
+    def _hasChildren(self):
+        return self._getNode().hasContent()
+
+    def firstChild(self):
+        node = self.node
+        if isinstance(node, tuple):
             parent, idx, parents = node
             parents.append((parent, idx))
             node = parent.childNodes[idx]
@@ -50,23 +76,23 @@ class TreeWalker(_base.NonRecursiveTreeWalker):
             parents = []
 
         assert node.hasContent(), "Node has no children"
-        return (node, 0, parents)
+        self.node = (node, 0, parents)
 
-    def getNextSibling(self, node):
-        assert isinstance(node, tuple), "Node is not a tuple: " + str(node)
-        parent, idx, parents = node
+    def nextSibling(self):
+        assert isinstance(self.node, tuple), "Node is not a tuple: " + str(node)
+        parent, idx, parents = self.node
         idx += 1
         if len(parent.childNodes) > idx:
-            return (parent, idx, parents)
+            self.node = (parent, idx, parents)
+            return True
         else:
-            return None
+            return False
 
-    def getParentNode(self, node):
-        assert isinstance(node, tuple)
-        parent, idx, parents = node
+    def parentNode(self):
+        assert isinstance(self.node, tuple)
+        parent, idx, parents = self.node
         if parents:
             parent, idx = parents.pop()
-            return parent, idx, parents
+            self.node = parent, idx, parents
         else:
-            # HACK: We could return ``parent`` but None will stop the algorithm the same way
-            return None
+            self.node = parent
