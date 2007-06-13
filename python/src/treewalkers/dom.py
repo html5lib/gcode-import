@@ -5,33 +5,56 @@ _ = gettext.gettext
 
 import _base
 
-from constants import voidElements
+class TreeWalker(_base.TreeWalker):
+    def __init__(self, node):
+        self.node = node
 
-class TreeWalker(_base.NonRecursiveTreeWalker):
-    def getNodeDetails(self, node):
+    def _getType(self):
+        node = self.node
+
         if node.nodeType == Node.DOCUMENT_TYPE_NODE:
-            return _base.DOCTYPE, node.nodeName
+            return "Doctype"
 
         elif node.nodeType in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE):
-            return _base.TEXT, node.nodeValue
+            return "Text"
 
         elif node.nodeType == Node.ELEMENT_NODE:
-            return _base.ELEMENT, node.nodeName, node.attributes.items(), node.hasChildNodes
+            return "Element"
 
         elif node.nodeType == Node.COMMENT_NODE:
-            return _base.COMMENT, node.nodeValue
+            return "Comment"
 
-        elif node.nodeType in (Node.DOCUMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE):
-            return (_base.DOCUMENT,)
+        elif node.nodeType == Node.DOCUMENT_NODE:
+            return "Document"
+
+        elif node.nodeType == Node.DOCUMENT_FRAGMENT_NODE:
+            return "DocumentFragment"
 
         else:
-            return _base.UNKNOWN, node.nodeType
+            raise Exception("What to do with PIs and other nodes?")
 
-    def getFirstChild(self, node):
-        return node.firstChild
+    def _getName(self):
+        return self.node.nodeName
 
-    def getNextSibling(self, node):
-        return node.nextSibling
+    def _getValue(self):
+        return self.node.nodeValue
 
-    def getParentNode(self, node):
-        return node.parentNode
+    def _getAttributes(self):
+        return tuple(self.node.attributes.items())
+
+    def _hasChildren(self):
+        return self.node.hasChildNodes()
+
+    def firstChild(self):
+        self.node = self.node.firstChild
+
+    def nextSibling(self):
+        node = self.node.nextSibling
+        if node is not None:
+            self.node = node
+            return True
+        else:
+            return False
+
+    def parentNode(self):
+        self.node = self.node.parentNode
