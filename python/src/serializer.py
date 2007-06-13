@@ -8,7 +8,7 @@ import gettext
 _ = gettext.gettext
 
 from filters.whitespace import Filter as WhitespaceFilter
-from filters.optionaltags import Filter as OptionalTagFilter
+from filters.inject_meta_charset import Filter as InjectMetaCharsetFilter
 
 from constants import voidElements, booleanAttributes, spaceCharacters
 
@@ -85,10 +85,7 @@ class HTMLSerializer(object):
         openElements = [] # list of (name, in_cdata) tuples
         self.errors = []
         if encoding and self.inject_meta_charset:
-            #treewalker = self.filter_inject_meta_charset(treewalker, encoding)
-            raise NotImplementedError
-        # XXX: WhitespaceFilter should be used before OptionalTagFilter
-        # for maximum efficiently of this latter filter
+            treewalker = InjectMetaCharsetFilter(treewalker, encoding)
         if self.strip_whitespace:
             treewalker = WhitespaceFilter(treewalker)
 
