@@ -22,15 +22,19 @@ class TreeWalker(_base.TreeWalker):
         else:
             return "Element"
 
-    type = property(_getType)
+    def _getName(self):
+        if self.currentNode.tag == "<!DOCTYPE>":
+            return self.currentNode.text
+        return self.currentNode.tag
 
-    name = property(lambda self: self.currentNode.tag == "<!DOCTYPE>" and self.currentNode.text or self.currentNode.tag)
+    def _getAttributes(self):
+        return tuple(self.currentNode.items())
 
-    attributes = property(lambda self: tuple(self.currentNode.items()))
+    def _getValue(self):
+        return getattr(self.currentNode, self.extra or 'text')
 
-    value = property(lambda self: getattr(self.currentNode, self.extra or 'text'))
-
-    hasChildren = property(lambda self: bool(self.currentNode or self.currentNode.text))
+    def _hasChildren(self):
+        return bool(self.currentNode or self.currentNode.text)
 
     def firstChild(self):
         if self.currentNode.text:
