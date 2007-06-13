@@ -2,7 +2,6 @@ import gettext
 _ = gettext.gettext
 
 import new
-import copy
 
 import _base
 from constants import voidElements
@@ -23,7 +22,14 @@ def getETreeModule(ElementTreeImplementation):
 def getETreeBuilder(ElementTreeImplementation):
     ElementTree = ElementTreeImplementation
 
-    class TreeWalker(_base.NonRecursiveTreeWalker):
+    _tag2type = {
+        "<DOCUMENT_ROOT>": "Document",
+        "<DOCUMENT_FRAGMENT>": "DocumentFragment",
+        "<!DOCTYPE>": "Doctype",
+        ElementTree.Comment: "Comment",
+    }
+
+    class TreeWalker(_base.TreeWalker):
         """Given the particular ElementTree representation, this implementation,
         to avoid using recursion, returns "nodes" as tuples with the following
         content:
@@ -36,51 +42,82 @@ def getETreeBuilder(ElementTreeImplementation):
         3. A list used as a stack of all ancestor *context nodes*. It is a
            pair tuple whose first item is an Element and second item is a child
            index.
+
+        Note that there is a TreeWalker taking advantage of lxml.etree internal
+        representation and specific API in html5lib.treewalkers.lxmletree.
         """
 
-        def getNodeDetails(self, node):
-            if isinstance(node, tuple): # It might be the root Element
+        def __init__(self, node):
+            if not hasattr(node, 'tag'):
+                node = node.getroot()
+            self.node = node
+
+        def _getType(self):
+            node = self.node
+            if isinstance(node, tuple):
                 elt, key, parents = node
                 if key in ("text", "tail"):
-                    return _base.TEXT, getattr(elt, key)
+                    return "Text"
                 else:
                     node = elt[int(key)]
+            return _tag2type.get(node.tag, "Element")
 
-            if not(hasattr(node, "tag")):
-                node = node.getroot()
+        def _getName(self):
+            node = self.node
+            if isinstance(node, tuple):
+                elt, key, parents = node
+                assert key not in ("text", "tail")
+                node = elt[int(key)]
+            if node.tag == "<!DOCTYPE>":
+                return node.text
+            return node.tag
 
-            if node.tag in ("<DOCUMENT_ROOT>", "<DOCUMENT_FRAGMENT>"):
-                return (_base.DOCUMENT,)
+        def _getValue(self):
+            node = self.node
+            if isinstance(node, tuple):
+                elt, key, parents = node
+                if key in ("text", "tail"):
+                    return getattr(elt, key)
+                else:
+                    node = elt[int(key)]
+            assert node.tag == ElementTree.Comment
+            return node.text
 
-            elif node.tag == "<!DOCTYPE>":
-                return _base.DOCTYPE, node.text
+        def _getAttributes(self):
+            node = self.node
+            if isinstance(node, tuple):
+                elt, key, parents = node
+                assert key not in ("text", "tail")
+                node = elt[int(key)]
+            assert node.tag not in _tag2type
+            return tuple(node.items())
 
-            elif type(node.tag) == type(ElementTree.Comment):
-                return _base.COMMENT, node.text
+        def _hasChildren(self):
+            node = self.node
+            if isinstance(node, tuple):
+                elt, key, parents = node
+                assert key not in ("text", "tail")
+                node = elt[int(key)]
+            assert node.tag not in ("<!DOCTYPE>", ElementTree.Comment)
+            return len(node) or node.text
 
-            else:
-                #This is assumed to be an ordinary element
-                return _base.ELEMENT, node.tag, node.attrib.items(), len(node) or node.text
-
-        def getFirstChild(self, node):
-            if isinstance(node, tuple): # It might be the root Element
+        def firstChild(self):
+            node = self.node
+            if isinstance(node, tuple):
                 elt, key, parents = node
                 assert key not in ("text", "tail"), "Text nodes have no children"
                 parents.append((elt, int(key)))
                 node = elt[int(key)]
             else:
                 parents = []
-            
+
             assert len(node) or node.text, "Node has no children"
-            if node.text:
-                return (node, "text", parents)
-            else:
-                return (node, 0, parents)
+            self.node = (node, node.text and "text" or 0, parents)
 
-        def getNextSibling(self, node):
-            assert isinstance(node, tuple), "Node is not a tuple: " + str(node)
+        def nextSibling(self):
+            assert isinstance(self.node, tuple), "Node is not a tuple: " + str(node)
 
-            elt, key, parents = node
+            elt, key, parents = self.node
             if key == "text":
                 key = -1
             elif key == "tail":
@@ -90,23 +127,24 @@ def getETreeBuilder(ElementTreeImplementation):
                 child = elt[key]
                 if child.tail:
                     parents.append((elt, key))
-                    return (child, "tail", parents)
+                    self.node = (child, "tail", parents)
+                    return True
 
             # case where key were "text" or "tail" or elt[key] had a tail
             key += 1
             if len(elt) > key:
-                return (elt, key, parents)
+                self.node = (elt, key, parents)
+                return True
             else:
-                return None
+                return False
 
-        def getParentNode(self, node):
-            assert isinstance(node, tuple)
-            elt, key, parents = node
+        def parentNode(self):
+            assert isinstance(self.node, tuple)
+            elt, key, parents = self.node
             if parents:
                 elt, key = parents.pop()
-                return elt, key, parents
+                self.node = (elt, key, parents)
             else:
-                # HACK: We could return ``elt`` but None will stop the algorithm the same way
-                return None
+                self.node = elt
 
     return locals()
