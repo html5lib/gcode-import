@@ -1,33 +1,40 @@
 
 class TreeWalker(object):
-    def _not_implemented_method(self):
+    def _getType(self):
         raise NotImplementedError
-
-    type = property(_not_implemented_method, doc= \
+    type = property(lambda self: self._getType(), doc= \
         """Read-only. A string, either "Document", "DocumentFragment", "Doctype",
         "Element", "Text" or "Comment".
         """)
 
-    name = property(_not_implemented_method, doc= \
+    def _getName(self):
+        raise NotImplementedError
+    name = property(lambda self: self._getName(), doc= \
         """Read-only. The current node's name.
 
         Valid only if type is "Doctype" or "Element".
         """)
 
-    attributes = property(_not_implemented_method, doc= \
+    def _getAttributes(self):
+        raise NotImplementedError
+    attributes = property(lambda self: self._getAttributes(), doc= \
         """Read-only. A tuple of (name, value) tuples representing the \
         current node's attributes.
 
         Valid only if type is "Element"
         """)
 
-    value = property(_not_implemented_method, doc= \
+    def _getValue(self):
+        raise NotImplementedError
+    value = property(lambda self: self._getValue(), doc= \
         """Read-only. The current node's value.
 
         Valid only if type is "Text" or "Comment".
         """)
 
-    hasChildren = property(_not_implemented_method, doc= \
+    def _hasChildren(self):
+        raise NotImplementedError
+    hasChildren = property(lambda self: self._hasChildren(), doc= \
         """Read-only. A boolean telling whether the current node has children.
 
         Valid only if type is "Document", "DocumentFragment" or "Element".
