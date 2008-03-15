@@ -30,13 +30,8 @@ class HTMLTokenizer(object):
 
     # XXX need to fix documentation
 
-    def __init__(self, stream, encoding=None, parseMeta=True, useChardet=True,
-                 lowercaseElementName=True, lowercaseAttrName=True):
+    def __init__(self, stream, encoding=None, parseMeta=True, useChardet=True):
         self.stream = HTMLInputStream(stream, encoding, parseMeta, useChardet)
-        
-        #Perform case conversions?
-        self.lowercaseElementName = lowercaseElementName
-        self.lowercaseAttrName = lowercaseAttrName
         
         self.states = {
             "data":self.dataState,
@@ -279,8 +274,6 @@ class HTMLTokenizer(object):
         token = self.currentToken
         # Add token to the queue to be yielded
         if (token["type"] in ("StartTag", "EndTag", "EmptyTag")):
-            if self.lowercaseElementName:
-                token["name"] = token["name"].translate(asciiUpper2Lower)
             if token["type"] == "EndTag" and token["data"]:
                self.tokenQueue.append({"type":"ParseError",
                                        "data":"attributes-in-end-tag"})
@@ -533,9 +526,8 @@ class HTMLTokenizer(object):
             # Attributes are not dropped at this stage. That happens when the
             # start tag token is emitted so values can still be safely appended
             # to attributes, but we do want to report the parse error in time.
-            if self.lowercaseAttrName:
-                self.currentToken["data"][-1][0] = (
-                    self.currentToken["data"][-1][0].translate(asciiUpper2Lower))
+            self.currentToken["data"][-1][0] = (
+                self.currentToken["data"][-1][0].translate(asciiUpper2Lower))
             for name, value in self.currentToken["data"][:-1]:
                 if self.currentToken["data"][-1][0] == name:
                     self.tokenQueue.append({"type": "ParseError", "data":

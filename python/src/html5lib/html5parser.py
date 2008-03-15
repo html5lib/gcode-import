@@ -182,13 +182,19 @@ class HTMLParser(object):
             # element.  If it matches a void element atheists did the wrong
             # thing and if it doesn't it's wrong for everyone.
 
-            if token["name"] not in voidElements:
+            if token["name"] not in voidElements and ":" not in token["name"][1:-1]:
                 self.parseError("incorrectly-placed-solidus")
 
             token["type"] = "StartTag"
+            if ":" in token["name"][1:-1]:
+                self.tokenizer.tokenQueue.append({"type":"EndTag","name":token["name"]})
 
         if token["type"] == "StartTag":
             token["data"] = dict(token["data"][::-1])
+            # XXXTB: lowercase attribute names (and don't do it in the tokenizer)
+        
+        if token["type"] in ("StartTag", "EndTag") and ":" not in token["name"][1:-1]:
+            token["name"] = token["name"].translate(asciiUpper2Lower)
 
         return token
 
@@ -528,9 +534,7 @@ class InHeadPhase(Phase):
 
         self. endTagHandler = utils.MethodDispatcher([
             ("head", self.endTagHead),
-            (("html", "body", "br", "p"), self.endTagImplyAfterHead),
-            (("title", "style", "script", "noscript"),
-              self.endTagTitleStyleScriptNoScript)
+            (("html", "body", "br", "p"), self.endTagImplyAfterHead)
         ])
         self.endTagHandler.default = self.endTagOther
 
@@ -611,8 +615,11 @@ class InHeadPhase(Phase):
             self.tree.openElements.pop()
 
     def startTagOther(self, name, attributes):
-        self.anythingElse()
-        self.parser.phase.processStartTag(name, attributes)
+        if name in ("title", "style", "script", "noscript") or ":" in name[1:-1]:
+            self.tree.insertElement(name, attributes)
+        else:
+            self.anythingElse()
+            self.parser.phase.processStartTag(name, attributes)
 
     def endTagHead(self, name):
         if self.tree.openElements[-1].name == "head":
@@ -625,14 +632,11 @@ class InHeadPhase(Phase):
         self.anythingElse()
         self.parser.phase.processEndTag(name)
 
-    def endTagTitleStyleScriptNoScript(self, name):
+    def endTagOther(self, name):
         if self.tree.openElements[-1].name == name:
             self.tree.openElements.pop()
         else:
             self.parser.parseError("unexpected-end-tag", {"name": name})
-
-    def endTagOther(self, name):
-        self.parser.parseError("unexpected-end-tag", {"name": name})
 
     def anythingElse(self):
         if self.tree.openElements[-1].name == "head":
