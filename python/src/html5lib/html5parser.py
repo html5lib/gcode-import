@@ -176,25 +176,35 @@ class HTMLParser(object):
     def normalizeToken(self, token):
         """ HTML5 specific normalizations to the token stream """
 
-        if token["type"] == "EmptyTag":
-            # When a solidus (/) is encountered within a tag name what happens
-            # depends on whether the current tag name matches that of a void
-            # element.  If it matches a void element atheists did the wrong
-            # thing and if it doesn't it's wrong for everyone.
+        if token["type"] in ("StartTag", "EmptyTag"):
+            if ":" not in token["name"][1:-1]:
+                # Lowercase only "unprefixed tag names"
+                token["name"] = token["name"].translate(asciiUpper2Lower)
+                token["data"] = dict([(name.translate(asciiUpper2Lower),value) for name,value in token["data"][::-1]])
+            else:
+                lowercasedAttributeNames = []
+                attrDict = {}
+                for name,value in token["data"]:
+                    lowercaseName = name.translate(asciiUpper2Lower)
+                    if lowercaseName not in lowercasedAttributeNames:
+                        attrDict[name] = value
+                token["data"] = attrDict
 
-            if token["name"] not in voidElements and ":" not in token["name"][1:-1]:
-                self.parseError("incorrectly-placed-solidus")
-
-            token["type"] = "StartTag"
-            if ":" in token["name"][1:-1]:
-                self.tokenizer.tokenQueue.append({"type":"EndTag","name":token["name"]})
-
-        if token["type"] == "StartTag":
-            token["data"] = dict(token["data"][::-1])
-            # XXXTB: lowercase attribute names (and don't do it in the tokenizer)
-        
-        if token["type"] in ("StartTag", "EndTag") and ":" not in token["name"][1:-1]:
-            token["name"] = token["name"].translate(asciiUpper2Lower)
+            if token["type"] == "EmptyTag":
+                # When a solidus (/) is encountered within a tag name what happens
+                # depends on whether the current tag name matches that of a void
+                # element or is a "prefixed tag name".
+                if ":" in token["name"][1:-1]:
+                    # Process both a Start and an End tag
+                    save = self.tokenizer.contentModelFlag
+                    self.phase.processStartTag(token["name"], token["data"])
+                    self.tokenizer.contentModelFlag = save
+                    token["data"] = {}
+                    token["type"] = "EndTag"
+                else:
+                    if token["name"] not in voidElements:
+                        self.parseError("incorrectly-placed-solidus")
+                    token["type"] = "StartTag"
 
         return token
 

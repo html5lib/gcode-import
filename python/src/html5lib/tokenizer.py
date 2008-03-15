@@ -526,13 +526,19 @@ class HTMLTokenizer(object):
             # Attributes are not dropped at this stage. That happens when the
             # start tag token is emitted so values can still be safely appended
             # to attributes, but we do want to report the parse error in time.
-            self.currentToken["data"][-1][0] = (
-                self.currentToken["data"][-1][0].translate(asciiUpper2Lower))
-            for name, value in self.currentToken["data"][:-1]:
-                if self.currentToken["data"][-1][0] == name:
-                    self.tokenQueue.append({"type": "ParseError", "data":
-                      "duplicate-attribute"})
-                    break
+            if ":" in self.currentToken["name"]:
+                for name, value in self.currentToken["data"][:-1]:
+                    if self.currentToken["data"][-1][0] == name:
+                        self.tokenQueue.append({"type": "ParseError", "data":
+                          "duplicate-attribute"})
+                        break
+            else:
+                lowercaseName = self.currentToken["data"][-1][0].translate(asciiUpper2Lower)
+                for name, value in self.currentToken["data"][:-1]:
+                    if lowercaseName == name.translate(asciiUpper2Lower):
+                        self.tokenQueue.append({"type": "ParseError", "data":
+                          "duplicate-attribute"})
+                        break
             # XXX Fix for above XXX
             if emitToken:
                 self.emitCurrentToken()
