@@ -4,6 +4,7 @@ module HTML5
   class AfterHeadPhase < Phase
 
     handle_start 'html', 'body', 'frameset', %w( base link meta script style title ) => 'FromHead'
+    handle_end %w( body html br ) => 'BodyHtmlBr'
 
     def process_eof
       anything_else
@@ -36,9 +37,13 @@ module HTML5
       @parser.phase.processStartTag(name, attributes)
     end
 
-    def processEndTag(name)
+    def endTagBodyHtmlBr(name)
       anything_else
       @parser.phase.processEndTag(name)
+    end
+
+    def endTagOther(name)
+      parse_error("unexpected-end-tag")
     end
 
     def anything_else
