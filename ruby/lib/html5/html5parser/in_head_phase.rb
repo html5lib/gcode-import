@@ -117,7 +117,7 @@ module HTML5
     end
 
     def endTagOther(name)
-      parse_error("unexpected-end-tag", {"name" => name})
+      anything_else
     end
 
     def anything_else
