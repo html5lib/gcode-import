@@ -22,13 +22,13 @@ module HTML5
     end
 
     def startTagOther name, attributes
-      parse_error("unexpected-start-tag")
+      parse_error("unexpected-start-tag", {'name' => name})
       @parser.phase = @parser.phases[:inBody]
       @parser.phase.processStartTag(name, attributes)
     end
 
     def endTagOther name
-      parse_error("unexpected-end-tag")
+      parse_error("unexpected-end-tag", {'name' => name})
       @parser.phase = @parser.phases[:inBody]
       @parser.phase.processEndTag(name)
     end

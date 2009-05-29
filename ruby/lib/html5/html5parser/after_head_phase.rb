@@ -43,7 +43,7 @@ module HTML5
     end
 
     def endTagOther(name)
-      parse_error("unexpected-end-tag")
+      parse_error("unexpected-end-tag", {"name" => name})
     end
 
     def anything_else
