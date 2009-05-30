@@ -36,6 +36,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 class HTML5_TreeConstructer {
     public $stack = array();
+    public $content_model;
 
     private $mode;
     private $original_mode;
@@ -138,7 +139,9 @@ class HTML5_TreeConstructer {
         /*
         $backtrace = debug_backtrace();
         if ($backtrace[1]['class'] !== 'HTML5_TreeConstructer') echo "--\n";
-        echo $this->strConst($mode) . "\n  ";
+        echo $this->strConst($mode);
+        if ($this->original_mode) echo " (originally ".$this->strConst($this->original_mode).")";
+        echo "\n  ";
         token_dump($token);
         $this->printStack();
         $this->printActiveFormattingElements();
@@ -206,7 +209,7 @@ class HTML5_TreeConstructer {
             /* Switch the insertion mode to "before html", then reprocess the
              * current token. */
             $this->mode = self::BEFORE_HTML;
-            return $this->emitToken($token);
+            $this->emitToken($token);
         }
         break;
 
@@ -253,7 +256,7 @@ class HTML5_TreeConstructer {
             /* Switch the insertion mode to "before head", then reprocess the
              * current token. */
             $this->mode = self::BEFORE_HEAD;
-            return $this->emitToken($token);
+            $this->emitToken($token);
         }
         break;
 
@@ -283,7 +286,7 @@ class HTML5_TreeConstructer {
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG && $token['name'] === 'html') {
             /* Process the token using the rules for the "in body"
              * insertion mode. */
-            return $this->processWithRulesFor($token, self::IN_BODY);
+            $this->processWithRulesFor($token, self::IN_BODY);
 
         /* A start tag token with the tag name "head" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG && $token['name'] === 'head') {
@@ -309,7 +312,7 @@ class HTML5_TreeConstructer {
                 'type' => HTML5_Tokenizer::STARTTAG,
                 'attr' => array()
             ));
-            return $this->emitToken($token);
+            $this->emitToken($token);
 
         /* Any other end tag */
         } elseif($token['type'] === HTML5_Tokenizer::ENDTAG) {
@@ -327,7 +330,7 @@ class HTML5_TreeConstructer {
                 'type' => HTML5_Tokenizer::STARTTAG,
                 'attr' => array()
             ));
-            return $this->emitToken($token);
+            $this->emitToken($token);
         }
         break;
 
@@ -356,7 +359,7 @@ class HTML5_TreeConstructer {
         /* A start tag whose tag name is "html" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG &&
         $token['name'] === 'html') {
-            return $this->processWithRulesFor($token, self::IN_BODY);
+            $this->processWithRulesFor($token, self::IN_BODY);
 
         /* A start tag whose tag name is one of: "base", "command", "link" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG &&
@@ -391,14 +394,14 @@ class HTML5_TreeConstructer {
 
         /* A start tag with the tag name "title" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG && $token['name'] === 'title') {
-            return $this->insertRCDATAElement($token);
+            $this->insertRCDATAElement($token);
 
         /* A start tag whose tag name is "noscript", if the scripting flag is enabled, or
          * A start tag whose tag name is one of: "noframes", "style" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG &&
         ($token['name'] === 'noscript' || $token['name'] === 'noframes' || $token['name'] === 'style')) {
             // XSCRIPT: Scripting flag not respected
-            return $this->insertCDATAElement($token);
+            $this->insertCDATAElement($token);
 
         // XSCRIPT: Scripting flag disable not implemented
 
@@ -426,7 +429,7 @@ class HTML5_TreeConstructer {
             /* 7. Switch the insertion mode to "in CDATA/RCDATA" */
             $this->mode = self::IN_CDATA_RCDATA;
             /* 5. Switch the tokeniser's content model flag to the CDATA state. */
-            return HTML5_Tokenizer::CDATA;
+            $this->content_model = HTML5_Tokenizer::CDATA;
 
         /* An end tag with the tag name "head" */
         } elseif($token['type'] === HTML5_Tokenizer::ENDTAG && $token['name'] === 'head') {
@@ -437,9 +440,11 @@ class HTML5_TreeConstructer {
             $this->mode = self::AFTER_HEAD;
 
         // Slight logic inversion here to minimize duplication
-        /* A start tag with the tag name "head" or an end tag except "html". */
+        /* A start tag with the tag name "head". */
+        /* An end tag whose tag name is not one of: "body", "html", "br" */
         } elseif(($token['type'] === HTML5_Tokenizer::STARTTAG && $token['name'] === 'head') ||
-        ($token['type'] === HTML5_Tokenizer::ENDTAG && $token['name'] !== 'html')) {
+        ($token['type'] === HTML5_Tokenizer::ENDTAG && $token['name'] !== 'html' &&
+        $token['name'] !== 'body' && $token['name'] !== 'br')) {
             // Parse error. Ignore the token.
             $this->ignored = true;
 
@@ -453,7 +458,7 @@ class HTML5_TreeConstructer {
             ));
 
             /* Then, reprocess the current token. */
-            return $this->emitToken($token);
+            $this->emitToken($token);
         }
         break;
 
@@ -461,7 +466,7 @@ class HTML5_TreeConstructer {
         if ($token['type'] === HTML5_Tokenizer::DOCTYPE) {
             // parse error
         } elseif ($token['type'] === HTML5_Tokenizer::STARTTAG && $token['name'] === 'html') {
-            return $this->processWithRulesFor($token, self::IN_BODY);
+            $this->processWithRulesFor($token, self::IN_BODY);
         } elseif ($token['type'] === HTML5_Tokenizer::ENDTAG && $token['name'] === 'noscript') {
             /* Pop the current node (which will be a noscript element) from the
              * stack of open elements; the new current node will be a head
@@ -475,7 +480,7 @@ class HTML5_TreeConstructer {
             ($token['type'] === HTML5_Tokenizer::STARTTAG && (
                 $token['name'] === 'link' || $token['name'] === 'meta' ||
                 $token['name'] === 'noframes' || $token['name'] === 'style'))) {
-            return $this->processWithRulesFor($token, self::IN_HEAD);
+            $this->processWithRulesFor($token, self::IN_HEAD);
         // inverted logic
         } elseif (
             ($token['type'] === HTML5_Tokenizer::STARTTAG && (
@@ -489,7 +494,7 @@ class HTML5_TreeConstructer {
                 'type' => HTML5_Tokenizer::ENDTAG,
                 'name' => 'noscript',
             ));
-            return $this->emitToken($token);
+            $this->emitToken($token);
         }
         break;
 
@@ -514,7 +519,7 @@ class HTML5_TreeConstructer {
             // parse error
 
         } elseif ($token['type'] === HTML5_Tokenizer::STARTTAG && $token['name'] === 'html') {
-            return $this->processWithRulesFor($token, self::IN_BODY);
+            $this->processWithRulesFor($token, self::IN_BODY);
 
         /* A start tag token with the tag name "body" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG && $token['name'] === 'body') {
@@ -542,9 +547,8 @@ class HTML5_TreeConstructer {
             /* Push the node pointed to by the head element pointer onto the
              * stack of open elements. */
             $this->stack[] = $this->head_pointer;
-            $out = $this->processWithRulesFor($token, self::IN_HEAD);
+            $this->processWithRulesFor($token, self::IN_HEAD);
             array_pop($this->stack);
-            return $out;
 
         // inversion of specification
         } elseif(
@@ -562,7 +566,7 @@ class HTML5_TreeConstructer {
                 'attr' => array()
             ));
             $this->flag_frameset_ok = true;
-            return $this->emitToken($token);
+            $this->emitToken($token);
         }
         break;
 
@@ -614,7 +618,7 @@ class HTML5_TreeConstructer {
                 case 'script': case 'style': case 'title':
                     /* Process the token as if the insertion mode had been "in
                     head". */
-                    return $this->processWithRulesFor($token, self::IN_HEAD);
+                    $this->processWithRulesFor($token, self::IN_HEAD);
                 break;
 
                 /* A start tag token with the tag name "body" */
@@ -784,10 +788,10 @@ class HTML5_TreeConstructer {
                          * tag with the same tag name as node had been seen, then
                          * jump to the last step. */
                         if(($token['name'] === 'li' && $node->tagName === 'li') ||
-                        ($node->tagName === 'dd' || $node->tagName === 'dt')) { // limited conditional
+                        ($token['name'] !== 'li' && ($node->tagName === 'dd' || $node->tagName === 'dt'))) { // limited conditional
                             $this->emitToken(array(
                                 'type' => HTML5_Tokenizer::ENDTAG,
-                                'name' => $token['name'],
+                                'name' => $node->tagName,
                             ));
                             break;
                         }
@@ -837,7 +841,7 @@ class HTML5_TreeConstructer {
                     /* Insert an HTML element for the token. */
                     $this->insertElement($token);
 
-                    return HTML5_Tokenizer::PLAINTEXT;
+                    $this->content_model = HTML5_Tokenizer::PLAINTEXT;
                 break;
 
                 // more diversions
@@ -1047,7 +1051,7 @@ class HTML5_TreeConstructer {
                     /* Parse error. Change the token's tag name to "img" and
                     reprocess it. (Don't ask.) */
                     $token['name'] = 'img';
-                    return $this->emitToken($token);
+                    $this->emitToken($token);
                 break;
 
                 /* A start tag whose tag name is "isindex" */
@@ -1176,7 +1180,7 @@ class HTML5_TreeConstructer {
 
                     /* Switch the tokeniser's content model flag to the
                     RCDATA state. */
-                    return HTML5_Tokenizer::RCDATA;
+                    $this->content_model = HTML5_Tokenizer::RCDATA;
                 break;
 
                 /* A start tag token whose tag name is "xmp" */
@@ -1186,16 +1190,17 @@ class HTML5_TreeConstructer {
 
                     $this->flag_frameset_ok = false;
 
-                    return $this->insertCDATAElement($token);
+                    $this->insertCDATAElement($token);
                 break;
 
                 case 'iframe':
                     $this->flag_frameset_ok = false;
-                    return $this->insertCDATAElement($token);
+                    $this->insertCDATAElement($token);
+                break;
 
                 case 'noembed': case 'noscript':
                     // XSCRIPT: should check scripting flag
-                    return $this->insertCDATAElement($token);
+                    $this->insertCDATAElement($token);
                 break;
 
                 /* A start tag whose tag name is "select" */
@@ -1317,7 +1322,7 @@ class HTML5_TreeConstructer {
                         'type' => HTML5_Tokenizer::ENDTAG
                     ));
 
-                    if (!$this->ignored) return $this->emitToken($token);
+                    if (!$this->ignored) $this->emitToken($token);
                 break;
 
                 case 'address': case 'article': case 'aside': case 'blockquote':
@@ -1842,7 +1847,7 @@ class HTML5_TreeConstructer {
                 'attr' => array()
             ));
 
-            return $this->emitToken($token);
+            $this->emitToken($token);
 
         /* A start tag whose tag name is one of: "tbody", "tfoot", "thead" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG && in_array($token['name'],
@@ -1866,7 +1871,7 @@ class HTML5_TreeConstructer {
                 'attr' => array()
             ));
 
-            return $this->emitToken($token);
+            $this->emitToken($token);
 
         /* A start tag whose tag name is "table" */
         } elseif($token['type'] === HTML5_Tokenizer::STARTTAG &&
@@ -1879,7 +1884,7 @@ class HTML5_TreeConstructer {
                 'type' => HTML5_Tokenizer::ENDTAG
             ));
 
-            if (!$this->ignored) return $this->emitToken($token);
+            if (!$this->ignored) $this->emitToken($token);
 
         /* An end tag whose tag name is "table" */
         } elseif($token['type'] === HTML5_Tokenizer::ENDTAG &&
@@ -1989,7 +1994,7 @@ class HTML5_TreeConstructer {
                 'type' => HTML5_Tokenizer::ENDTAG
             ));
 
-            if (!$this->ignored) return $this->emitToken($token);
+            if (!$this->ignored) $this->emitToken($token);
 
         /* An end tag whose tag name is one of: "body", "col", "colgroup",
         "html", "tbody", "td", "tfoot", "th", "thead", "tr" */
@@ -2070,7 +2075,7 @@ class HTML5_TreeConstructer {
                 'type' => HTML5_Tokenizer::ENDTAG
             ));
 
-            if (!$this->ignored) return $this->emitToken($token);
+            if (!$this->ignored) $this->emitToken($token);
         }
     break;
 
@@ -2098,7 +2103,7 @@ class HTML5_TreeConstructer {
                 'attr' => array()
             ));
 
-            return $this->emitToken($token);
+            $this->emitToken($token);
 
         /* An end tag whose tag name is one of: "tbody", "tfoot", "thead" */
         } elseif($token['type'] === HTML5_Tokenizer::ENDTAG &&
@@ -2146,7 +2151,7 @@ class HTML5_TreeConstructer {
                     'type' => HTML5_Tokenizer::ENDTAG
                 ));
 
-                return $this->emitToken($token);
+                $this->emitToken($token);
             }
 
         /* An end tag whose tag name is one of: "body", "caption", "col",
@@ -2213,7 +2218,7 @@ class HTML5_TreeConstructer {
                 'name' => 'tr',
                 'type' => HTML5_Tokenizer::ENDTAG
             ));
-            if (!$this->ignored) return $this->emitToken($token);
+            if (!$this->ignored) $this->emitToken($token);
 
         /* An end tag whose tag name is one of: "tbody", "tfoot", "thead" */
         } elseif($token['type'] === HTML5_Tokenizer::ENDTAG &&
@@ -2233,7 +2238,7 @@ class HTML5_TreeConstructer {
                     'type' => HTML5_Tokenizer::ENDTAG
                 ));
 
-                return $this->emitToken($token);
+                $this->emitToken($token);
             }
 
         /* An end tag whose tag name is one of: "body", "caption", "col",
@@ -2301,7 +2306,7 @@ class HTML5_TreeConstructer {
             token. */
             } else {
                 $this->closeCell();
-                return $this->emitToken($token);
+                $this->emitToken($token);
             }
 
         /* An end tag whose tag name is one of: "body", "caption", "col",
@@ -2326,7 +2331,7 @@ class HTML5_TreeConstructer {
             token. */
             } else {
                 $this->closeCell();
-                return $this->emitToken($token);
+                $this->emitToken($token);
             }
 
         /* Anything else */
@@ -2575,7 +2580,7 @@ class HTML5_TreeConstructer {
             /* Parse error. Set the insertion mode to "in body" and reprocess
             the token. */
             $this->mode = self::IN_BODY;
-            return $this->emitToken($token);
+            $this->emitToken($token);
         }
     break;
 
@@ -3119,14 +3124,14 @@ class HTML5_TreeConstructer {
         $this->insertElement($token);
         $this->original_mode = $this->mode;
         $this->mode = self::IN_CDATA_RCDATA;
-        return HTML5_Tokenizer::CDATA;
+        $this->content_model = HTML5_Tokenizer::CDATA;
     }
 
     private function insertRCDATAElement($token) {
         $this->insertElement($token);
         $this->original_mode = $this->mode;
         $this->mode = self::IN_CDATA_RCDATA;
-        return HTML5_Tokenizer::RCDATA;
+        $this->content_model = HTML5_Tokenizer::RCDATA;
     }
 
     private function getAttr($token, $key) {
@@ -3135,7 +3140,6 @@ class HTML5_TreeConstructer {
         foreach ($token['attr'] as $keypair) {
             if ($keypair['name'] === $key) $ret = $keypair['value'];
         }
-        var_dump($ret);
         return $ret;
     }
 

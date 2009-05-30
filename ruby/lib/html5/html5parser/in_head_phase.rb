@@ -7,7 +7,7 @@ module HTML5
     handle_start %w( base link meta)
 
     handle_end 'head'
-    handle_end %w( body br ) => 'ImplyAfterHead'
+    handle_end %w( html body br ) => 'ImplyAfterHead'
     handle_end %w( title style script noscript )
 
     def process_eof
@@ -117,7 +117,7 @@ module HTML5
     end
 
     def endTagOther(name)
-      parse_error("unexpected-end-tag", {"name" => name})
+      anything_else
     end
 
     def anything_else
