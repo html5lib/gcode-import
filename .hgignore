@@ -1,3 +1,5 @@
+syntax: glob
 php/test-settings.php
-.pyc
+php/bin/*.html
+*.pyc
 tags
