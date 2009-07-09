@@ -654,10 +654,11 @@ class HTML5_Tokenizer {
                     } else {
                         /* U+0022 QUOTATION MARK (")
                            U+0027 APOSTROPHE (')
+                           U+003C LESS-THAN SIGN (<)
                            U+003D EQUALS SIGN (=)
                         Parse error. Treat it as per the "anything else" entry
                         below. */
-                        if($char === '"' || $char === "'" || $char === '=') {
+                        if($char === '"' || $char === "'" || $char === '<' || $char === '=') {
                             $this->emitToken(array(
                                 'type' => self::PARSEERROR,
                                 'data' => 'invalid-character-in-attribute-name'
@@ -733,9 +734,10 @@ class HTML5_Tokenizer {
                     } else {
                         /* U+0022 QUOTATION MARK (")
                            U+0027 APOSTROPHE (')
+                           U+003C LESS-THAN SIGN (<)
                         Parse error. Treat it as per the "anything else"
                         entry below. */
-                        if($char === '"' || $char === "'") {
+                        if($char === '"' || $char === "'" || $char === '<') {
                             $this->emitToken(array(
                                 'type' => self::PARSEERROR,
                                 'data' => 'invalid-character-in-attribute-name'
@@ -820,9 +822,10 @@ class HTML5_Tokenizer {
                     } else {
                         /* U+0022 QUOTATION MARK (")
                            U+0027 APOSTROPHE (')
+                           U+003C LESS-THAN SIGN(<)
                         Parse error. Treat it as per the "anything else"
                         entry below. */
-                        if($char === '"' || $char === "'") {
+                        if($char === '"' || $char === "'" || $char === "<") {
                             $this->emitToken(array(
                                 'type' => self::PARSEERROR,
                                 'data' => 'invalid-character-after-attribute-name'
@@ -894,8 +897,9 @@ class HTML5_Tokenizer {
 
                     } else {
                         /* U+003D EQUALS SIGN (=)
+                         * U+003C LESS-THAN SIGN (<)
                         Parse error. Treat it as per the "anything else" entry below. */
-                        if($char === '=') {
+                        if($char === '=' || $char === '<') {
                             $this->emitToken(array(
                                 'type' => self::PARSEERROR,
                                 'data' => 'equals-in-unquoted-attribute-value'
@@ -1105,14 +1109,6 @@ class HTML5_Tokenizer {
                         Emit the current tag token. Switch to the data state. */
                         // not sure if this is the name we want
                         $this->token['self-closing'] = true;
-                        /* When an end tag token is emitted with its self-closing flag set,
-                        that is a parse error. */
-                        if ($this->token['type'] === self::ENDTAG) {
-                            $this->emitToken(array(
-                                'type' => self::PARSEERROR,
-                                'data' => 'self-closing-end-tag'
-                            ));
-                        }
                         $this->emitToken($this->token);
                         $state = 'data';
 
@@ -2363,18 +2359,48 @@ class HTML5_Tokenizer {
     /**
      * Emits a token, passing it on to the tree builder.
      */
-    protected function emitToken($token, $checkStream = true) {
+    protected function emitToken($token, $checkStream = true, $dry = false) {
         if ($checkStream) {
             // Emit errors from input stream.
             while ($this->stream->errors) {
                 $this->emitToken(array_shift($this->stream->errors), false);
             }
         }
+        if($token['type'] === self::ENDTAG && !empty($token['attr'])) {
+            for ($i = 0; $i < count($token['attr']); $i++) {
+                $this->emitToken(array(
+                    'type' => self::PARSEERROR,
+                    'data' => 'attributes-in-end-tag'
+                ));
+            }
+        }
+        if($token['type'] === self::ENDTAG && !empty($token['self-closing'])) {
+            $this->emitToken(array(
+                'type' => self::PARSEERROR,
+                'data' => 'self-closing-flag-on-end-tag',
+            ));
+        }
+        if($token['type'] === self::STARTTAG) {
+            // This could be changed to actually pass the tree-builder a hash
+            $hash = array();
+            foreach ($token['attr'] as $keypair) {
+                if (isset($hash[$keypair['name']])) {
+                    $this->emitToken(array(
+                        'type' => self::PARSEERROR,
+                        'data' => 'duplicate-attribute',
+                    ));
+                } else {
+                    $hash[$keypair['name']] = $keypair['value'];
+                }
+            }
+        }
 
-        // the current structure of attributes is not a terribly good one
-        $this->tree->emitToken($token);
+        if(!$dry) {
+            // the current structure of attributes is not a terribly good one
+            $this->tree->emitToken($token);
+        }
 
-        if(is_int($this->tree->content_model)) {
+        if(!$dry && is_int($this->tree->content_model)) {
             $this->content_model = $this->tree->content_model;
             $this->tree->content_model = null;
 
