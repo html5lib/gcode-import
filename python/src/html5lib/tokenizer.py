@@ -39,6 +39,7 @@ class HTMLTokenizer:
 
     def __init__(self, stream, encoding=None, parseMeta=True, useChardet=True,
                  lowercaseElementName=True, lowercaseAttrName=True):
+
         self.stream = HTMLInputStream(stream, encoding, parseMeta, useChardet)
         
         #Perform case conversions?
@@ -286,6 +287,7 @@ class HTMLTokenizer:
         elif data is EOF:
             # Tokenization ends.
             return False
+
         elif data in spaceCharacters:
             # Directly after emitting a token you switch back to the "data
             # state". At that point spaceCharacters are important so they are
@@ -454,7 +456,7 @@ class HTMLTokenizer:
             self.emitCurrentToken()
         elif data == u"/":
             self.state = self.selfClosingStartTagState
-        elif data == u"'" or data == u'"' or data == u"=":
+        elif data in (u"'", u'"', u"=", u"<"):
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "invalid-character-in-attribute-name"})
             self.currentToken["data"].append([data, ""])
@@ -487,7 +489,7 @@ class HTMLTokenizer:
             self.state = self.afterAttributeNameState
         elif data == u"/":
             self.state = self.selfClosingStartTagState
-        elif data == u"'" or data == u'"':
+        elif data in (u"'", u'"', u"<"):
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "invalid-character-in-attribute-name"})
             self.currentToken["data"][-1][0] += data
@@ -531,7 +533,7 @@ class HTMLTokenizer:
             self.state = self.attributeNameState
         elif data == u"/":
             self.state = self.selfClosingStartTagState
-        elif data == u"'" or data == u'"':
+        elif data in (u"'", u'"', u"<"):
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "invalid-character-after-attribute-name"})
             self.currentToken["data"].append([data, ""])
@@ -560,7 +562,7 @@ class HTMLTokenizer:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "expected-attribute-value-but-got-right-bracket"})
             self.emitCurrentToken()
-        elif data == u"=":
+        elif data in (u"=", u"<"):
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "equals-in-unquoted-attribute-value"})
             self.currentToken["data"][-1][1] += data

@@ -61,6 +61,7 @@ class HTMLParser(object):
             "inBody": InBodyPhase(self, self.tree),
             "inCDataRCData": InCDataRCDataPhase(self, self.tree),
             "inTable": InTablePhase(self, self.tree),
+            "inTableText": InTableTextPhase(self, self.tree),
             "inCaption": InCaptionPhase(self, self.tree),
             "inColumnGroup": InColumnGroupPhase(self, self.tree),
             "inTableBody": InTableBodyPhase(self, self.tree),
@@ -190,7 +191,8 @@ class HTMLParser(object):
         regardless of any BOM or later declaration (such as in a meta
         element)
         """
-        self._parse(stream, innerHTML=False, encoding=encoding)
+        self._parse(stream, innerHTML=False, encoding=encoding, 
+                    parseMeta=parseMeta, useChardet=useChardet)
         return self.tree.getDocument()
     
     def parseFragment(self, stream, container="div", encoding=None,
@@ -1124,22 +1126,31 @@ class InBodyPhase(Phase):
         self.parser.parseError("deprecated-tag", {"name": "isindex"})
         if self.tree.formPointer:
             return
-        self.processStartTag(impliedTagToken("form", "StartTag"))
+        form_attrs = {}
+        if "action" in token["data"]:
+            form_attrs["action"] = token["data"]["action"]
+        self.processStartTag(impliedTagToken("form", "StartTag",
+                                             attributes=form_attrs))
         self.processStartTag(impliedTagToken("hr", "StartTag"))
-        self.processStartTag(impliedTagToken("p", "StartTag"))
         self.processStartTag(impliedTagToken("label", "StartTag"))
         # XXX Localization ...
+        if "prompt" in token["data"]:
+            prompt = token["data"]["prompt"]
+        else:
+            prompt = "This is a searchable index. Insert your search keywords here: "
         self.processCharacters(
-            {"type":tokenTypes["Characters"], 
-             "data":"This is a searchable index. Insert your search keywords here: "})
-        attributes = token["data"].copy() #don't really need a copy here I think
+            {"type":tokenTypes["Characters"], "data":prompt})
+        attributes = token["data"].copy()
+        if "action" in attributes:
+            del attributes["action"]
+        if "prompt" in attributes:
+            del attributes["prompt"]
         attributes["name"] = "isindex"
         self.processStartTag(impliedTagToken("input", "StartTag", 
                                              attributes = attributes,
                                              selfClosing = 
                                              token["selfClosing"]))
         self.processEndTag(impliedTagToken("label"))
-        self.processEndTag(impliedTagToken("p"))
         self.processStartTag(impliedTagToken("hr", "StartTag"))
         self.processEndTag(impliedTagToken("form"))
 
@@ -1567,22 +1578,16 @@ class InTablePhase(Phase):
         #Stop parsing
 
     def processSpaceCharacters(self, token):
-        if "tainted" not in self.getCurrentTable()._flags:
-            self.tree.insertText(token["data"])
-        else:
-            self.processCharacters(token)
+        self.parser.phase = self.parser.phases["inTableText"]
+        self.parser.phase.originalPhase = self
+        self.parser.phase.characterTokens.append(token)
 
     def processCharacters(self, token):
-        if self.tree.openElements[-1].name in ("style", "script"):
-           self.tree.insertText(token)
-        else:
-            if "tainted" not in self.getCurrentTable()._flags:
-                self.parser.parseError("unexpected-char-implies-table-voodoo")
-                self.getCurrentTable()._flags.append("tainted")
-            # Do the table magic!
-            self.tree.insertFromTable = True
-            self.parser.phases["inBody"].processCharacters(token)
-            self.tree.insertFromTable = False
+        #If we get here there must be at least one non-whitespace character
+        # Do the table magic!
+        self.tree.insertFromTable = True
+        self.parser.phases["inBody"].processCharacters(token)
+        self.tree.insertFromTable = False
 
     def startTagCaption(self, token):
         self.clearStackToTableContext()
@@ -1616,10 +1621,7 @@ class InTablePhase(Phase):
             self.parser.phase.processStartTag(token)
 
     def startTagStyleScript(self, token):
-        if "tainted" not in self.getCurrentTable()._flags:
-            self.parser.phases["inHead"].processStartTag(token)
-        else:
-            self.startTagOther(token)
+        self.parser.phases["inHead"].processStartTag(token)
 
     def startTagInput(self, token):
         if ("type" in token["data"] and 
@@ -1668,6 +1670,48 @@ class InTablePhase(Phase):
         self.parser.phases["inBody"].processEndTag(token)
         self.tree.insertFromTable = False
 
+class InTableTextPhase(Phase):
+    def __init__(self, parser, tree):
+        Phase.__init__(self, parser, tree)
+        self.originalPhase = None
+        self.characterTokens = []
+
+    def flushCharacters(self):
+        data = "".join([item["data"] for item in self.characterTokens])
+        if any([item not in spaceCharacters for item in data]):
+            token = {"type":tokenTypes["Characters"], "data":data}
+            self.originalPhase.processCharacters(token)
+        elif data:
+            self.tree.insertText(data)
+        self.characterTokens = []
+
+    def processComment(self, token):
+        self.flushCharacters()
+        self.phase = self.originalPhase
+        self.phase.processComment(token)
+
+    def processEOF(self, token):
+        self.flushCharacters()
+        self.phase = self.originalPhase
+        self.phase.processEOF(token)
+
+    def processCharacters(self, token):
+        self.characterTokens.append(token)
+
+    def processSpaceCharacters(self, token):
+        #pretty sure we should never reach here
+        assert False
+
+    def processStartTag(self, token):        
+        self.flushCharacters()
+        self.phase = self.originalPhase
+        self.phase.processStartTag(token)
+
+    def processEndTag(self, token):
+        self.flushCharacters()
+        self.phase = self.originalPhase
+        self.phase.processEndTag(token)
+    
 
 class InCaptionPhase(Phase):
     # http://www.whatwg.org/specs/web-apps/current-work/#in-caption
