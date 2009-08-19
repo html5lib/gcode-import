@@ -21,7 +21,7 @@ from constants import cdataElements, rcdataElements, voidElements
 from constants import tokenTypes, ReparseException, namespaces
 
 def parse(doc, treebuilder="simpletree", encoding=None, 
-          namespaceHTMLElements=False):
+          namespaceHTMLElements=True):
     tb = treebuilders.getTreeBuilder(treebuilder)
     p = HTMLParser(tb, namespaceHTMLElements=namespaceHTMLElements)
     return p.parse(doc, encoding=encoding)
@@ -32,7 +32,7 @@ class HTMLParser(object):
 
     def __init__(self, tree = simpletree.TreeBuilder,
                  tokenizer = tokenizer.HTMLTokenizer, strict = False,
-                 namespaceHTMLElements = False):
+                 namespaceHTMLElements = True):
         """
         strict - raise an exception when a parse error is encountered
 
@@ -1582,8 +1582,9 @@ class InTablePhase(Phase):
         #Stop parsing
 
     def processSpaceCharacters(self, token):
+        originalPhase = self.parser.phase
         self.parser.phase = self.parser.phases["inTableText"]
-        self.parser.phase.originalPhase = self
+        self.parser.phase.originalPhase = originalPhase
         self.parser.phase.characterTokens.append(token)
 
     def processCharacters(self, token):
@@ -1704,7 +1705,8 @@ class InTableTextPhase(Phase):
 
     def processSpaceCharacters(self, token):
         #pretty sure we should never reach here
-        assert False
+        self.characterTokens.append(token)
+#        assert False
 
     def processStartTag(self, token):        
         self.flushCharacters()
