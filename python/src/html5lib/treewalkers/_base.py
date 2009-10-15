@@ -60,7 +60,8 @@ class TreeWalker(object):
     def doctype(self, name, publicId=None, systemId=None, correct=True):
         return {"type": "Doctype",
                 "name": name is not None and unicode(name) or u"",
-                "publicId": publicId, "systemId": systemId,
+                "publicId": publicId,
+                "systemId": systemId,
                 "correct": correct}
 
     def unknown(self, nodeType):
@@ -121,7 +122,8 @@ class NonRecursiveTreeWalker(TreeWalker):
             elif type == ELEMENT:
                 namespace, name, attributes, hasChildren = details
                 if name in voidElements:
-                    for token in self.emptyTag(namespace, name, attributes, hasChildren):
+                    for token in self.emptyTag(namespace, name, attributes, 
+                                               hasChildren):
                         yield token
                     hasChildren = False
                 else:
@@ -152,11 +154,12 @@ class NonRecursiveTreeWalker(TreeWalker):
                         namespace, name, attributes, hasChildren = details
                         if name not in voidElements:
                             yield self.endTag(namespace, name)
+                    if self.tree is currentNode:
+                        currentNode = None
+                        break
                     nextSibling = self.getNextSibling(currentNode)
                     if nextSibling is not None:
                         currentNode = nextSibling
                         break
-                    if self.tree is currentNode:
-                        currentNode = None
                     else:
                         currentNode = self.getParentNode(currentNode)
