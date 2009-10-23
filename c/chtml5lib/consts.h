@@ -1,0 +1,1 @@
+char *valid_encodings[216];
