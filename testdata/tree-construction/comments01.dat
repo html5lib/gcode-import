@@ -1,0 +1,143 @@
+#data
+FOO<!-- BAR -->BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  BAR  -->
+|     "BAZ"
+
+#data
+FOO<!-- BAR --!>BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  BAR  -->
+|     "BAZ"
+
+#data
+FOO<!-- BAR --   >BAZ
+#errors
+3: Non-space characters found without seeing a doctype first. Expected “<!DOCTYPE html>”.
+15: Consecutive hyphens did not terminate a comment. “--” is not permitted inside a comment, but e.g. “- -” is.
+21: End of file inside comment.
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  BAR --   >BAZ -->
+
+#data
+FOO<!-- BAR -- <QUX> -- MUX -->BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  BAR -- <QUX> -- MUX  -->
+|     "BAZ"
+
+#data
+FOO<!-- BAR -- <QUX> -- MUX --!>BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  BAR -- <QUX> -- MUX  -->
+|     "BAZ"
+
+#data
+FOO<!-- BAR -- <QUX> -- MUX -- >BAZ
+#errors
+3: Non-space characters found without seeing a doctype first. Expected “<!DOCTYPE html>”.
+15: Consecutive hyphens did not terminate a comment. “--” is not permitted inside a comment, but e.g. “- -” is.
+24: Consecutive hyphens did not terminate a comment. “--” is not permitted inside a comment, but e.g. “- -” is.
+31: Consecutive hyphens did not terminate a comment. “--” is not permitted inside a comment, but e.g. “- -” is.
+35: End of file inside comment.
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  BAR -- <QUX> -- MUX -- >BAZ -->
+
+#data
+FOO<!---->BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  -->
+|     "BAZ"
+
+#data
+FOO<!--->BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  -->
+|     "BAZ"
+
+#data
+FOO<!-->BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!--  -->
+|     "BAZ"
+
+#data
+<?xml version="1.0">Hi
+#errors
+#document
+| <!-- ?xml version="1.0" -->
+| <html>
+|   <head>
+|   <body>
+|     "Hi"
+
+#data
+<?xml version="1.0">
+#errors
+#document
+| <!-- ?xml version="1.0" -->
+| <html>
+|   <head>
+|   <body>
+
+#data
+<?xml version
+#errors
+#document
+| <!-- ?xml version -->
+| <html>
+|   <head>
+|   <body>
+
+#data
+FOO<!----->BAZ
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     "FOO"
+|     <!-- - -->
+|     "BAZ"
