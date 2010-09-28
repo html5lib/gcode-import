@@ -126,8 +126,12 @@ try:
                 text = None
 
             if type in ("StartTag", "EmptyTag"):
+                if token["namespace"]:
+                    name = u"{%s}%s" % (token["namespace"], token["name"])
+                else:
+                    name = token["name"]
                 yield (START,
-                       (QName(token["name"]),
+                       (QName(name),
                         Attrs([(QName(attr),value) for attr,value in token["data"]])),
                        (None, -1, -1))
                 if type == "EmptyTag":
@@ -149,10 +153,10 @@ try:
         if text is not None:
             yield TEXT, text, (None, -1, -1)
 
-    treeTypes["genshi"] = \
-        {"builder": treebuilders.getTreeBuilder("simpletree"),
-         "adapter": GenshiAdapter,
-         "walker":  treewalkers.getTreeWalker("genshi")}
+    #treeTypes["genshi"] = \
+    #    {"builder": treebuilders.getTreeBuilder("simpletree"),
+    #     "adapter": GenshiAdapter,
+    #     "walker":  treewalkers.getTreeWalker("genshi")}
 except ImportError:
     pass
 
@@ -179,7 +183,16 @@ def convertTokens(tokens):
     for token in concatenateCharacterTokens(tokens):
         type = token["type"]
         if type in ("StartTag", "EmptyTag"):
-            output.append(u"%s<%s>" % (" "*indent, token["name"]))
+            if (token["namespace"] and
+                token["namespace"] != constants.namespaces["html"]):
+                if token["namespace"] in constants.prefixes:
+                    name = constants.prefixes[token["namespace"]]
+                else:
+                    name = token["namespace"]
+                name += u" " + token["name"]
+            else:
+                name = token["name"]
+            output.append(u"%s<%s>" % (" "*indent, name))
             indent += 2
             attrs = token["data"]
             if attrs:
@@ -202,7 +215,7 @@ def convertTokens(tokens):
                                    token["publicId"],
                                    token["systemId"] and token["systemId"] or ""))
                 elif token["systemId"]:
-                    output.append("""%s<!DOCTYPE %s SYSTEM "%s">"""% 
+                    output.append("""%s<!DOCTYPE %s "" "%s">"""% 
                                   (" "*indent, token["name"], 
                                    token["systemId"]))
                 else:
@@ -277,11 +290,8 @@ def buildTestSuite():
 
     for treeName, treeCls in treeTypes.iteritems():
         files = html5lib_test_files('tree-construction')
-        files = [f for f in files if 
-                 not f.split(".")[-2][-2:] in ("s9", "10", "11", "12")] #skip namespace tests for now
         for filename in files:
             testName = os.path.basename(filename).replace(".dat","")
-            if testName == "tests5": continue # TODO
 
             tests = TestData(filename, "data")
 
