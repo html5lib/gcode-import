@@ -39,10 +39,11 @@ class HTMLTokenizer:
     # XXX need to fix documentation
 
     def __init__(self, stream, encoding=None, parseMeta=True, useChardet=True,
-                 lowercaseElementName=True, lowercaseAttrName=True):
+                 lowercaseElementName=True, lowercaseAttrName=True, parser=None):
 
         self.stream = HTMLInputStream(stream, encoding, parseMeta, useChardet)
-        
+        self.parser = parser
+
         #Perform case conversions?
         self.lowercaseElementName = lowercaseElementName
         self.lowercaseAttrName = lowercaseAttrName
@@ -223,7 +224,11 @@ class HTMLTokenizer:
         if fromAttribute:
             self.currentToken["data"][-1][1] += output
         else:
-            self.tokenQueue.append({"type": tokenTypes["Characters"], "data": output})
+            if output in spaceCharacters:
+                tokenType = "SpaceCharacters"
+            else:
+                tokenType = "Characters"
+            self.tokenQueue.append({"type": tokenTypes[tokenType], "data": output})
 
     def processEntityInAttribute(self, allowedChar):
         """This method replaces the need for "entityInAttributeValueState".
@@ -844,7 +849,6 @@ class HTMLTokenizer:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "eof-in-attribute-name"})
             self.state = self.dataState
-            emitToken = True
         else:
             self.currentToken["data"][-1][0] += data
             leavingThisState = False
@@ -887,7 +891,7 @@ class HTMLTokenizer:
         elif data is EOF:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "expected-end-of-tag-but-got-eof"})
-            self.emitCurrentToken()
+            self.state = self.dataState
         else:
             self.currentToken["data"].append([data, ""])
             self.state = self.attributeNameState
@@ -916,7 +920,7 @@ class HTMLTokenizer:
         elif data is EOF:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "expected-attribute-value-but-got-eof"})
-            self.emitCurrentToken()
+            self.state = self.dataState
         else:
             self.currentToken["data"][-1][1] += data
             self.state = self.attributeValueUnQuotedState
@@ -931,7 +935,7 @@ class HTMLTokenizer:
         elif data is EOF:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "eof-in-attribute-value-double-quote"})
-            self.emitCurrentToken()
+            self.state = self.dataState
         else:
             self.currentToken["data"][-1][1] += data +\
               self.stream.charsUntil(("\"", u"&"))
@@ -946,7 +950,7 @@ class HTMLTokenizer:
         elif data is EOF:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "eof-in-attribute-value-single-quote"})
-            self.emitCurrentToken()
+            self.state = self.dataState
         else:
             self.currentToken["data"][-1][1] += data +\
               self.stream.charsUntil(("'", u"&"))
@@ -967,7 +971,7 @@ class HTMLTokenizer:
         elif data is EOF:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "eof-in-attribute-value-no-quotes"})
-            self.emitCurrentToken()
+            self.state = self.dataState
         else:
             self.currentToken["data"][-1][1] += data + self.stream.charsUntil(
               frozenset((u"&", u">", u'"', u"'", u"=", u"<", u"`")) | spaceCharacters)
@@ -984,7 +988,6 @@ class HTMLTokenizer:
         elif data is EOF:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "unexpected-EOF-after-attribute-value"})
-            self.emitCurrentToken()
             self.stream.unget(data)
             self.state = self.dataState
         else:
@@ -1059,6 +1062,19 @@ class HTMLTokenizer:
                                      "publicId": None, "systemId": None, 
                                      "correct": True}
                 self.state = self.doctypeState
+                return True
+        elif (charStack[-1] == "[" and 
+              self.parser is not None and 
+              self.parser.phase == self.parser.phases["inForeignContent"] and
+              self.parser.tree.openElements[-1].namespace != self.parser.tree.defaultNamespace):
+            matched = True
+            for expected in ["C", "D", "A", "T", "A", "["]:
+                charStack.append(self.stream.char())
+                if charStack[-1] != expected:
+                    matched = False
+                    break
+            if matched:
+                self.state = self.cdataSectionState
                 return True
 
         self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
@@ -1151,11 +1167,6 @@ class HTMLTokenizer:
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
              "unexpected-dash-after-double-dash-in-comment"})
             self.currentToken["data"] += data
-        elif data in spaceCharacters:
-            self.currentToken["data"] += "--" + data
-            self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
-              "unexpected-space-after-double-dash-in-comment"})
-            self.state = self.commentEndSpaceState
         elif data == "!":
             self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
               "unexpected-bang-after-double-dash-in-comment"})
@@ -1188,25 +1199,6 @@ class HTMLTokenizer:
             self.state = self.dataState
         else:
             self.currentToken["data"] += u"--!" + data
-            self.state = self.commentState
-        return True
-
-    def commentEndSpaceState(self):
-        data = self.stream.char()
-        if data == u">":
-            self.tokenQueue.append(self.currentToken)
-            self.state = self.dataState
-        elif data == u"-":
-            self.state = self.commentEndDashState
-        elif data in spaceCharacters:
-            self.currentToken["data"] += data
-        elif data is EOF:
-            self.tokenQueue.append({"type": tokenTypes["ParseError"], "data":
-              "eof-in-comment-end-space-state"})
-            self.tokenQueue.append(self.currentToken)
-            self.state = self.dataState
-        else:
-            self.currentToken["data"] += data
             self.state = self.commentState
         return True
 
@@ -1584,4 +1576,30 @@ class HTMLTokenizer:
             self.state = self.dataState
         else:
             pass
+        return True
+
+    def cdataSectionState(self):
+        data = []
+        while True:
+            data.append(self.stream.charsUntil(u"]"))
+            charStack = []
+
+            for expected in ["]", "]", ">"]:
+                charStack.append(self.stream.char())
+                matched = True
+                if charStack[-1] == EOF:
+                    data.extend(charStack[:-1])
+                    break
+                elif charStack[-1] != expected:
+                    matched = False
+                    data.extend(charStack)
+                    break
+
+            if matched:
+                break
+        data = "".join(data)
+        if data:
+            self.tokenQueue.append({"type": tokenTypes["Characters"], "data": 
+                                    data})
+        self.state = self.dataState
         return True
