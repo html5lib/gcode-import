@@ -44,6 +44,7 @@ from constants import formattingElements, specialElements
 from constants import headingElements, tableInsertModeElements
 from constants import cdataElements, rcdataElements, voidElements
 from constants import tokenTypes, ReparseException, namespaces, spaceCharacters
+from constants import htmlIntegrationPointElements, mathmlTextIntegrationPointElements
 
 def parse(doc, treebuilder="simpletree", encoding=None, 
           namespaceHTMLElements=True):
@@ -105,7 +106,8 @@ class HTMLParser(object):
         self.container = container
         self.tokenizer = self.tokenizer_class(stream, encoding=encoding,
                                               parseMeta=parseMeta,
-                                              useChardet=useChardet, **kwargs)
+                                              useChardet=useChardet, 
+                                              parser=self, **kwargs)
         self.reset()
 
         while True:
@@ -908,7 +910,7 @@ def getPhases(debug):
                 (("applet", "marquee", "object"), self.startTagAppletMarqueeObject),
                 ("xmp", self.startTagXmp),
                 ("table", self.startTagTable),
-                (("area", "br", "embed", "img", "input", "keygen", "spacer", 
+                (("area", "br", "embed", "img", "input", "keygen", 
                   "wbr"), self.startTagVoidFormatting),
                 (("param", "source"), self.startTagParamSource),
                 ("hr", self.startTagHr),
