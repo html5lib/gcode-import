@@ -1,4 +1,7 @@
-import new
+try:
+    from types import ModuleType
+except:
+    from new import module as ModuleType
 import re
 import types
 
@@ -16,7 +19,7 @@ def getETreeModule(ElementTreeImplementation, fullTree=False):
     if name in moduleCache:
         return moduleCache[name]
     else:
-        mod = new.module("_" + ElementTreeImplementation.__name__+"builder")
+        mod = ModuleType("_" + ElementTreeImplementation.__name__+"builder")
         objs = getETreeBuilder(ElementTreeImplementation, fullTree)
         mod.__dict__.update(objs)
         moduleCache[name] = mod    
