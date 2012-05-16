@@ -167,7 +167,7 @@ class HTMLConformanceChecker < HTML5::Filters::Base
     # <embed> handled separately
     'object'       => %w[data type usemap height width],
     'param'        => %w[name value],
-    'video'        => %w[src autoplay start loopstart loopend end loopcount controls],
+    'video'        => %w[src autoplay start loopstart loopend end loopcount controls poster],
     'audio'        => %w[src autoplay start loopstart loopend end loopcount controls],
     'source'       => %w[src type media],
     'canvas'       => %w[height width],
