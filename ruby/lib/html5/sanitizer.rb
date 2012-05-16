@@ -45,9 +45,9 @@ module HTML5
       dir disabled enctype for frame headers height href hreflang hspace id
       ismap label lang longdesc loop loopcount loopend loopstart
       maxlength media method multiple name nohref
-      noshade nowrap poster prompt readonly rel rev rows rowspan rules scope
-      selected shape size span src start style summary tabindex target title
-      type usemap valign value vspace width xml:lang]
+      noshade nowrap poster preload prompt readonly rel rev rows rowspan rules
+      scope selected shape size span src start style summary tabindex target
+      title type usemap valign value vspace width xml:lang]
 
     MATHML_ATTRIBUTES = Set.new %w[actiontype align close
       columnalign columnlines columnspacing columnspan depth display
