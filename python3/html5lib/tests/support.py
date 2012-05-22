@@ -110,7 +110,7 @@ class TestData(object):
     
     def normaliseOutput(self, data):
         #Remove trailing newlines
-        for key,value in data.iteritems():
+        for key,value in data.items():
             if value.endswith("\n"):
                 data[key] = value[:-1]
         return data
@@ -118,14 +118,14 @@ class TestData(object):
 def convert(stripChars):
     def convertData(data):
         """convert the output of str(document) to the format used in the testcases"""
-        data = data.split(u"\n")
+        data = data.split("\n")
         rv = []
         for line in data:
-            if line.startswith(u"|"):
+            if line.startswith("|"):
                 rv.append(line[stripChars:])
             else:
                 rv.append(line)
-        return u"\n".join(rv)
+        return "\n".join(rv)
     return convertData
 
 convertExpected = convert(2)
