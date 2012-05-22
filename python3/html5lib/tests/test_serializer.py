@@ -1,6 +1,6 @@
 import os
 import unittest
-from support import html5lib_test_files
+from .support import html5lib_test_files
 
 try:
     import json
@@ -81,11 +81,11 @@ class JsonWalker(TreeWalker):
 
 
 def serialize_html(input, options):
-    options = dict([(str(k),v) for k,v in options.iteritems()])
+    options = dict([(str(k),v) for k,v in options.items()])
     return serializer.HTMLSerializer(**options).render(JsonWalker(input),options.get("encoding",None))
 
 def serialize_xhtml(input, options):
-    options = dict([(str(k),v) for k,v in options.iteritems()])
+    options = dict([(str(k),v) for k,v in options.items()])
     return serializer.XHTMLSerializer(**options).render(JsonWalker(input),options.get("encoding",None))
 
 def runSerializerTest(input, expected, xhtml, options):
@@ -93,9 +93,9 @@ def runSerializerTest(input, expected, xhtml, options):
 
     if encoding:
         encode = lambda x: x.encode(encoding)
-        expected = map(encode, expected)
+        expected = list(map(encode, expected))
         if xhtml:
-            xhtml = map(encode, xhtml)
+            xhtml = list(map(encode, xhtml))
         
     
     result = serialize_html(input, options)
@@ -119,41 +119,41 @@ class EncodingTestCase(unittest.TestCase):
         self.assertRaises(UnicodeEncodeError, serialize_html, input, {"encoding": "iso-8859-1"})
 
     def testDoctypeName(self):
-        self.throwsWithLatin1([["Doctype", u"\u0101"]])
+        self.throwsWithLatin1([["Doctype", "\u0101"]])
 
     def testDoctypePublicId(self):
-        self.throwsWithLatin1([["Doctype", u"potato", u"\u0101"]])
+        self.throwsWithLatin1([["Doctype", "potato", "\u0101"]])
 
     def testDoctypeSystemId(self):
-        self.throwsWithLatin1([["Doctype", u"potato", u"potato", u"\u0101"]])
+        self.throwsWithLatin1([["Doctype", "potato", "potato", "\u0101"]])
 
     def testCdataCharacters(self):
-        runSerializerTest([["StartTag", "http://www.w3.org/1999/xhtml", "style", {}], ["Characters", u"\u0101"]],
-                          [u"<style>&amacr;"], None, {"encoding": "iso-8859-1"})
+        runSerializerTest([["StartTag", "http://www.w3.org/1999/xhtml", "style", {}], ["Characters", "\u0101"]],
+                          ["<style>&amacr;"], None, {"encoding": "iso-8859-1"})
 
     def testCharacters(self):
-        runSerializerTest([["Characters", u"\u0101"]],
-                          [u"&amacr;"], None, {"encoding": "iso-8859-1"})
+        runSerializerTest([["Characters", "\u0101"]],
+                          ["&amacr;"], None, {"encoding": "iso-8859-1"})
 
     def testStartTagName(self):
-        self.throwsWithLatin1([["StartTag", u"http://www.w3.org/1999/xhtml", u"\u0101", []]])
+        self.throwsWithLatin1([["StartTag", "http://www.w3.org/1999/xhtml", "\u0101", []]])
 
     def testEmptyTagName(self):
-        self.throwsWithLatin1([["EmptyTag", u"http://www.w3.org/1999/xhtml", u"\u0101", []]])
+        self.throwsWithLatin1([["EmptyTag", "http://www.w3.org/1999/xhtml", "\u0101", []]])
 
     def testAttributeName(self):
-        self.throwsWithLatin1([["StartTag", u"http://www.w3.org/1999/xhtml", u"span", [{"namespace": None, "name": u"\u0101", "value": u"potato"}]]])
+        self.throwsWithLatin1([["StartTag", "http://www.w3.org/1999/xhtml", "span", [{"namespace": None, "name": "\u0101", "value": "potato"}]]])
 
     def testAttributeValue(self):
-        runSerializerTest([["StartTag", u"http://www.w3.org/1999/xhtml", u"span",
-                            [{"namespace": None, "name": u"potato", "value": u"\u0101"}]]],
-                          [u"<span potato=&amacr;>"], None, {"encoding": "iso-8859-1"})
+        runSerializerTest([["StartTag", "http://www.w3.org/1999/xhtml", "span",
+                            [{"namespace": None, "name": "potato", "value": "\u0101"}]]],
+                          ["<span potato=&amacr;>"], None, {"encoding": "iso-8859-1"})
 
     def testEndTagName(self):
-        self.throwsWithLatin1([["EndTag", u"http://www.w3.org/1999/xhtml", u"\u0101"]])
+        self.throwsWithLatin1([["EndTag", "http://www.w3.org/1999/xhtml", "\u0101"]])
 
     def testComment(self):
-        self.throwsWithLatin1([["Comment", u"\u0101"]])
+        self.throwsWithLatin1([["Comment", "\u0101"]])
 
 
 if "lxml" in optionals_loaded:
@@ -167,20 +167,20 @@ if "lxml" in optionals_loaded:
             doc = """<!DOCTYPE html SYSTEM "about:legacy-compat"><html>&beta;</html>"""
             tree = etree.fromstring(doc, parser = self.parser).getroottree()
             result = serializer.serialize(tree, tree="lxml", omit_optional_tags=False)
-            self.assertEqual(u"""<!DOCTYPE html SYSTEM "about:legacy-compat"><html>\u03B2</html>""", result)
+            self.assertEqual("""<!DOCTYPE html SYSTEM "about:legacy-compat"><html>\u03B2</html>""", result)
 
         def testEntityXML(self):
             doc = """<!DOCTYPE html SYSTEM "about:legacy-compat"><html>&gt;</html>"""
             tree = etree.fromstring(doc, parser = self.parser).getroottree()
             result = serializer.serialize(tree, tree="lxml", omit_optional_tags=False)
-            self.assertEqual(u"""<!DOCTYPE html SYSTEM "about:legacy-compat"><html>&gt;</html>""", result)
+            self.assertEqual("""<!DOCTYPE html SYSTEM "about:legacy-compat"><html>&gt;</html>""", result)
 
         def testEntityNoResolve(self):
             doc = """<!DOCTYPE html SYSTEM "about:legacy-compat"><html>&beta;</html>"""
             tree = etree.fromstring(doc, parser = self.parser).getroottree()
             result = serializer.serialize(tree, tree="lxml", omit_optional_tags=False,
                                           resolve_entities=False)
-            self.assertEqual(u"""<!DOCTYPE html SYSTEM "about:legacy-compat"><html>&beta;</html>""", result)
+            self.assertEqual("""<!DOCTYPE html SYSTEM "about:legacy-compat"><html>&beta;</html>""", result)
 
 def test_serializer():
     for filename in html5lib_test_files('serializer', '*.test'):

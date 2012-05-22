@@ -1,50 +1,43 @@
-#!/usr/bin/env python3.0
+#!/usr/bin/env python
 """usage: %prog [options] filename
 
-Parse a document to a simpletree tree, with optional profiling
+Parse a document to a tree, with optional profiling
 """
-#RELEASE move ./examples/
 
 import sys
 import os
+import traceback
 from optparse import OptionParser
 
-print(sys.stdout.encoding)
-
-#RELEASE remove
-sys.path.insert(0,os.path.abspath(os.path.join(__file__,'../src')))
-#END RELEASE
-print(sys.path)
-import html5lib
-import html5lib.html5parser as html5parser
+from html5lib import html5parser, sanitizer
 from html5lib.tokenizer import HTMLTokenizer
-from html5lib import treebuilders
 from html5lib import treebuilders, serializer, treewalkers
 from html5lib import constants
 
 def parse():
     optParser = getOptParser()
     opts,args = optParser.parse_args()
-    encoding = None
+    encoding = "utf8"
 
     try:
         f = args[-1]
         # Try opening from the internet
         if f.startswith('http://'):
             try:
-                from urllib import request
-                f = request.urlopen(f)
+                import urllib.request, urllib.parse, urllib.error, cgi
+                f = urllib.request.urlopen(f)
                 contentType = f.headers.get('content-type')
                 if contentType:
                     (mediaType, params) = cgi.parse_header(contentType)
                     encoding = params.get('charset')
-            except: pass
+            except: 
+                pass
         elif f == '-':
             f = sys.stdin
         else:
             try:
                 # Try opening from file system
-                f = open(f, "rb")
+                f = open(f)
             except IOError: pass
     except IndexError:
         sys.stderr.write("No filename provided. Use -h for help\n")
@@ -57,10 +50,7 @@ def parse():
     else:
         tokenizer = HTMLTokenizer
 
-    if opts.liberalxml:
-        p = liberalxmlparser.XHTMLParser(tree=treebuilder, tokenizer=tokenizer)
-    else:
-        p = html5parser.HTMLParser(tree=treebuilder, tokenizer=tokenizer)
+    p = html5parser.HTMLParser(tree=treebuilder, tokenizer=tokenizer, debug=opts.log)
 
     if opts.fragment:
         parseMethod = p.parseFragment
@@ -68,50 +58,70 @@ def parse():
         parseMethod = p.parse
 
     if opts.profile:
-        #XXX should import cProfile instead and use that
-        try:
-            import cProfile as profile
-        except ImportError:
-            import profile
+        import cProfile
         import pstats
-        prof = profile.run('parseMethod(f, encoding=encoding)', 'prof.out')
-        prof.close()
+        cProfile.runctx("run(parseMethod, f, encoding)", None,
+                        {"run": run,
+                         "parseMethod": parseMethod,
+                         "f": f,
+                         "encoding": encoding},
+                        "stats.prof")
         # XXX - We should use a temp file here
-        stats = pstats.stats('prof.out')
-        stats.strip_dirs().sort_stats('time').print_stats()
+        stats = pstats.Stats('stats.prof')
+        stats.strip_dirs()
+        stats.sort_stats('time')
+        stats.print_stats()
     elif opts.time:
         import time
         t0 = time.time()
-        document = parseMethod(f, encoding=encoding)
+        document = run(parseMethod, f, encoding)
         t1 = time.time()
         printOutput(p, document, opts)
         t2 = time.time()
         sys.stderr.write("\n\nRun took: %fs (plus %fs to print the output)"%(t1-t0, t2-t1))
     else:
-        document = parseMethod(f, encoding=encoding)
+        document = run(parseMethod, f, encoding)
         printOutput(p, document, opts)
+
+def run(parseMethod, f, encoding):
+    try:
+        document = parseMethod(f, encoding=encoding)
+    except:
+        document = None
+        traceback.print_exc()    
+    return document
 
 def printOutput(parser, document, opts):
     if opts.encoding:
         print("Encoding:", parser.tokenizer.stream.charEncoding)
-    if opts.xml:
-        sys.stdout.write(document.toxml("utf-8"))
-    elif opts.tree:
-        if not hasattr(document,'__getitem__'): document = [document]
-        for fragment in document:
-            sys.stdout.write(parser.tree.testSerializer(fragment))
-        sys.stdout.write("\n")
-    elif opts.hilite:
-        sys.stdout.write(document.hilite("utf-8"))
-    elif opts.html:
-        kwargs = {}
-        for opt in serializer.HTMLSerializer.options:
-            kwargs[opt] = getattr(opts,opt)
-        if not kwargs['quote_char']: del kwargs['quote_char']
-        tokens = treewalkers.getTreeWalker(opts.treebuilder)(document)
-        for text in serializer.HTMLSerializer(**kwargs).serialize(tokens):
-            sys.stdout.write(text)
-        if not text.endswith('\n'): sys.stdout.write('\n')
+
+    for item in parser.log:
+        print(item)
+
+    if document is not None:
+        if opts.xml:
+            sys.stdout.write(document.toxml("utf-8"))
+        elif opts.tree:
+            if not hasattr(document,'__getitem__'): 
+                document = [document]
+            for fragment in document:
+                print(parser.tree.testSerializer(fragment).encode("utf-8"))
+        elif opts.hilite:
+            sys.stdout.write(document.hilite("utf-8"))
+        elif opts.html:
+            kwargs = {}
+            for opt in serializer.HTMLSerializer.options:
+                try:
+                    kwargs[opt] = getattr(opts,opt)
+                except:
+                    pass
+            if not kwargs['quote_char']: 
+                del kwargs['quote_char']
+
+            tokens = treewalkers.getTreeWalker(opts.treebuilder)(document)
+            for text in serializer.HTMLSerializer(**kwargs).serialize(tokens, encoding='utf-8'):
+                sys.stdout.write(text)
+            if not text.endswith('\n'): sys.stdout.write('\n')
     if opts.error:
         errList=[]
         for pos, errorcode, datavars in parser.errors:
@@ -201,6 +211,9 @@ def getOptParser():
 
     parser.add_option("", "--sanitize", action="store_true", default=False,
                       dest="sanitize", help="sanitize")
+
+    parser.add_option("-l", "--log", action="store_true", default=False,
+                      dest="log", help="log state transitions")
 
     return parser
 
