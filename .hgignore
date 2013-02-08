@@ -1,0 +1,6 @@
+syntax: glob
+php/test-settings.php
+php/bin/*.html
+*.pyc
+tags
+stats.prof
