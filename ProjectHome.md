@@ -1,0 +1,1 @@
+# NOTE: html5lib is now hosted at github: https://github.com/html5lib #
