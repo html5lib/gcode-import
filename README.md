@@ -1,2 +1,2 @@
 # gcode-import
-Automatically exported from https://github.com/html5lib. Purely archival.
+Automatically exported from github.com/html5lib/gcode-import. Purely archival.
